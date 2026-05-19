@@ -1,0 +1,26 @@
+// ============================================
+// Frontend 本番環境設定ファイル（サンプル）
+// ============================================
+// このファイルを environment.prod.ts にコピーして、実際の値に書き換えてください
+
+export const environment = {
+  production: true,
+  
+  // API URL（本番環境のURL）
+  apiBaseUrl: 'https://your-api-domain.com/api',
+  
+  // ============================================
+  // MSAL / Entra ID 設定（実際の値に書き換えてください）
+  // ============================================
+  clientId: 'YOUR_CLIENT_ID',
+  tenantId: 'YOUR_TENANT_ID',
+  
+  // 認証Authority
+  authority: 'https://login.microsoftonline.com/YOUR_TENANT_ID',
+  
+  // リダイレクトURI（本番環境のURL）
+  redirectUri: 'https://your-domain.com/callback',
+  
+  // MSALスコープ
+  scopes: ['openid', 'profile', 'email']
+};

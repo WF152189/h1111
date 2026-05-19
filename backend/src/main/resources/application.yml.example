@@ -1,0 +1,56 @@
+# ============================================
+# Backend 設定ファイル（サンプル）
+# ============================================
+# このファイルを application.yml にコピーして、実際の値に書き換えてください
+
+spring:
+  application:
+    name: auth-app
+  
+  # データベース設定（H2）
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+# サーバー設定
+server:
+  port: 8080
+
+# ============================================
+# Entra ID 設定（実際の値に書き換えてください）
+# ============================================
+app:
+  entra:
+    tenant-id: YOUR_TENANT_ID
+    client-id: YOUR_CLIENT_ID
+    issuer: https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0
+  
+  # JWT 設定
+  jwt:
+    secret: YOUR_JWT_SECRET_KEY_AT_LEAST_256_BITS
+    expiration: 86400000  # 24時間（ミリ秒）
+
+# CORS 設定
+  cors:
+    allowed-origins: http://localhost:4200
+    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+
+# ログ設定
+logging:
+  level:
+    com.auth.app: DEBUG
+    org.springframework.security: DEBUG

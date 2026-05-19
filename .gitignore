@@ -70,3 +70,25 @@ bk/
 
 # OS
 .vs/
+
+# ============================================
+# 除外：プロジェクトルートのファイル
+# ============================================
+# ドキュメントファイル（必要な場合は手動で追加）
+*.md
+*.puml
+*.xlsx
+*.txt
+.qoder/
+
+# ============================================
+# 除外：設定ファイル（機密情報を含む可能性）
+# ============================================
+# Backend 設定
+backend/src/main/resources/application.yml
+backend/src/main/resources/application-*.yml
+
+# Frontend 環境設定
+frontend/src/environments/environment.prod.ts
+frontend/src/environments/environment.ts
+frontend/src/environments/environment.*.ts
