@@ -1,0 +1,77 @@
+@startuml
+skinparam ActivityBackgroundColor #White
+skinparam ActivityBorderColor #333
+skinparam ArrowColor #666
+skinparam NoteBackgroundColor #FEFFDF
+
+title 認証・認可ロジック フローチャート（ver5準拠）
+
+start
+
+:業務画面起動;
+:LocalStorageから業務JWTを取得;
+:セッション有効性チェック（exp確認）;
+
+if (業務JWTは有効か？) then (Yes [ログイン済])
+  :業務APIへ初期データ要求;
+else (No [未ログイン/期限切れ])
+  :Azure Entra ID 認証要求 (PKCE);
+  :認可コード取得とトークン交換;
+  :Entra ID JWTの取得;
+  :業務APIへ業務JWT発行要求
+  (Bearer: Entra JWT);
+  
+  partition "業務API / 外部連携GW" {
+    :Entra JWTの署名検証;
+    :外部連携GW経由で権限管理APIへ照会;
+    :ロール・権限情報の取得;
+    :業務JWT & リフレッシュトークン(RT)発行;
+  }
+  
+  :業務JWTをLocalStorageに保存;
+  :RTをHttpOnly Cookieに保存;
+  :業務APIへ初期データ要求;
+endif
+
+:業務初期画面を表示;
+
+repeat
+  :ユーザ操作（メニュー選択/API実行）;
+  
+  if (業務JWTの有効期限は?) then (期限切れ)
+    partition "共通サブフロー: RTによる更新処理" {
+      :業務APIへJWT更新要求 (Cookie内RT送信);
+      if (リフレッシュトークン(RT)は有効か?) then (有効)
+        :最新権限を権限管理APIから再取得;
+        :業務JWT & RTを再発行 (RTローテーション);
+        :LocalStorage & Cookieを更新;
+      else (無効・期限切れ)
+        :トークン類を削除 (LocalStorage/Cookie);
+        :再ログイン案内を表示;
+        stop
+      endif
+    }
+  else (有効)
+    :そのまま続行;
+  endif
+
+  if (API実行または認可要求) then
+    :Authorizationヘッダーに業務JWTを付与;
+    :業務APIでJWT署名と権限を検証;
+    if (検証・認可成功?) then (成功)
+      :業務アプリ(APP)を実行;
+      :API応答をブラウザへ返却;
+    else (失敗)
+      :エラー処理 (401/403等);
+    endif
+  endif
+
+backward:画面操作継続;
+repeat while (ユーザがログアウトを選択?) is (No)
+
+:業務APIへRT無効化要求;
+:端末内トークンを削除;
+:ログアウト完了画面表示;
+
+stop
+@enduml

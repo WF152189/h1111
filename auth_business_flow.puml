@@ -1,0 +1,198 @@
+@startuml
+' ============================================================
+' 認証・認可機能 業務フロー（基本設計レベル）
+' 参照: auth_sequence_ver5.puml
+' ============================================================
+
+title 認証・認可機能 業務フロー概要
+
+skinparam ActivityBackgroundColor #EEF7FF
+skinparam ActivityBorderColor #2E75B6
+skinparam ActivityDiamondBackgroundColor #FFF2CC
+skinparam ActivityDiamondBorderColor #D6B400
+skinparam ArrowColor #1F4E79
+skinparam NoteBackgroundColor #FFFACD
+skinparam NoteBorderColor #999999
+skinparam PartitionBackgroundColor #F8F9FA
+skinparam DefaultFontName メイリオ
+
+' ============================================================
+' フロー1: アプリ起動・二重ログインチェック
+' ============================================================
+|#D6E8FF| フロー1\nアプリ起動・二重ログインチェック |
+
+start
+
+:業務画面起動（ショートカット）;
+
+:コンテンツ配布コンテナーから\n業務画面（HTML/JS）を取得;
+
+:LocalStorage から業務JWT を取得;
+
+:業務JWT の有効期限（exp）を確認\n【二重ログインチェック】;
+
+if (業務JWT 有効？) then (有効)
+
+  :業務初期データを取得;
+  :業務初期画面を表示;
+  note right
+    再認証不要
+    既存セッションで継続
+  end note
+
+else (無効・なし)
+
+  ' ============================================================
+  ' フロー2: Azure Entra ID 認証
+  ' ============================================================
+  |#D0F0E0| フロー2\nAzure Entra ID 認証 |
+
+    :Azure Entra ID へ認証要求\n（Authorization Code Flow with PKCE）;
+
+    :ユーザーが Azure AD ログインで認証\n（MFA 対応）;
+
+    :認可コード（code）を取得;
+
+    :トークン交換要求\n（code + code_verifier）;
+
+    :Entra ID JWT 取得\n（id_token / access_token）\n※ メモリ一時保持のみ（LocalStorage 非保存）;
+
+    ' ============================================================
+    ' フロー3: 権限管理API認証・認可
+    ' ============================================================
+    |#C8EAC8| フロー3\n権限管理API認証・認可 |
+
+    :Entra ID JWT で権限管理APIへ\n業務JWT 取得要求;
+
+    :Entra ID JWT 署名検証;
+
+    :外部権限管理API から\nユーザーの権限情報を照会;
+
+    if (認可成功？) then (成功)
+
+      :業務JWT を発行\n（roles / permissions 含む）;
+
+      :リフレッシュトークンを発行\n（業務JWT に対応）;
+
+      :業務JWT を LocalStorage に保存\nリフレッシュトークンを\nHttpOnly Cookie に保存;
+      note right
+        業務JWT → LocalStorage
+        （exp: 短期 例15分）
+        ⚠ XSSリスク注意、CSP 設定が必須
+        リフレッシュトークン → HttpOnly Cookie
+        （Secure属性付き、XSSリスク軽減）
+      end note
+
+      :業務初期データを取得;
+      :業務初期画面を表示;
+
+    else (失敗)
+      :認可エラーを表示;
+      stop
+    endif
+
+endif
+
+' ============================================================
+' フロー4: アプリケーションアクセス（API認可）
+' ============================================================
+|#FFF4CC| フロー4\nアプリケーションアクセス（API 認可）|
+
+repeat
+
+  :メニューを選択;
+
+  :LocalStorage から業務JWT を取得;
+  :業務JWT の有効期限（exp）を確認;
+
+  if (業務JWT 有効？) then (有効)
+
+    ' JWT 有効 → そのまま API 呼び出しへ
+
+  else (期限切れ)
+
+    if (リフレッシュトークン有効？) then (有効)
+
+      :権限管理APIへ\nリフレッシュトークンで業務JWT 更新要求;
+
+      :業務JWT を再発行\n（RTローテーション）;
+
+      :LocalStorage の業務JWT を更新\n新規リフレッシュトークンを\nHttpOnly Cookie に保存;
+      note right
+        RTローテーション：
+        旧リフレッシュトークンを即時無効化
+        新規リフレッシュトークンを発行
+      end note
+
+    else (無効)
+
+      :LocalStorage の業務JWT をクリア\nリフレッシュトークン Cookie を削除;
+      :セッション期限切れ通知\n（モーダル表示）;
+      note right
+        「セッションが期限切れです。
+        再ログインしてください。」
+      end note
+      :Entra ID 再認証へ遷移\n（フロー1 参照）;
+
+    endif
+
+  endif
+
+  :業務JWT を Bearer Token として付与\n外部連携GW へ API 呼出;
+
+  :外部連携GW が業務アプリへ\nAPI 呼出を転送;
+
+  if (業務処理成功？) then (成功)
+    :業務処理を実行;
+    :API 応答を返却
+（200 Success）;
+    :画面を表示;
+  else (失敗)
+    :エラーを返却;
+    note right
+      エラー内容
+    end note
+  endif
+
+repeat while (業務操作を継続？) is (継続)
+-> (終了);
+
+:ログアウト処理へ;
+
+' ============================================================
+' フロー6: ログアウト
+' ============================================================
+|#FFE0E0| フロー6\nログアウト |
+
+:ユーザーがログアウトを要求;
+
+:権限管理APIへ\nリフレッシュトークン無効化要求;
+
+:端末内トークン削除\n(LocalStorage JWT + HttpOnly Cookie RT);
+
+:ログアウト完了画面を表示;
+
+stop
+
+' ============================================================
+' フロー5: 業務JWT 自動更新（バックグラウンドタイマー）
+' ============================================================
+note
+  【共通サブフロー】RTによる業務JWT更新処理（オンデマンド方式）
+
+  ・バックグラウンドタイマーは使用しない（オンデマンド更新）
+  ・フロー2（画面遷移時）・フロー3（API呼出時）のJWT期限切れ検知時に実行
+  ・RT有効の場合:
+      → 権限管理APIへCookie内RTを送信・業務JWT更新要求
+      → 外部権限管理APIから最新の権限を照会
+      → 新規業務JWT + 新規RT 発行（RTローテーション：旧RT即時無効化）
+      → LocalStorage の業務JWT を更新
+      → 新規RT を HttpOnly Cookie に保存
+      → 呼び出し元フローへ復帰
+  ・RT無効・期限切れの場合:
+      → LocalStorage の業務JWT をクリア + Cookie 削除
+      → セッション期限切れ通知（モーダル表示）
+      → フロー1 へ再認証
+end note
+
+@enduml
