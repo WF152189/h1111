@@ -1,3 +1,0 @@
-canActivateChild :キャン・アクティベート・チャイルド　 
-lazyLoad :ラジィー・ロード
-routes :ロー・ツー
