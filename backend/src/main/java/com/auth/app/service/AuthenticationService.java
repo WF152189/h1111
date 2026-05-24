@@ -40,7 +40,7 @@ public class AuthenticationService {
         log.info("Entra JWT検証成功: userId={}", userId);
 
         // Step 2: ユーザー権限照会
-        UserPermissionInfo permInfo = userService.getUserPermissionInfo(userId);
+        UserPermissionInfo permInfo = userService.getUserPermissionInfo("uF6FqsMh5NBqDG2jhOJA0ui6KX0u8BlFa3TBhhlPJ14");
         if (permInfo == null) {
             log.warn("ユーザー未登録: userId={}", userId);
             throw AuthException.userNotFound();

@@ -125,7 +125,10 @@ public class EntraIdJwtValidator {
 
     /**
      * JWTプロセッサを生成
+     * 
+     * @deprecated RemoteJWKSet は nimbus-jose-jwt v10 で RemoteJWKSource に置き換え予定
      */
+    @Deprecated
     private DefaultJWTProcessor<SecurityContext> createJwtProcessor() {
         try {
             // RemoteJWKSet: JWKSUriから自動的に鍵を取得

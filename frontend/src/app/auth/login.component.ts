@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../core/services/auth.service';
 import { TokenService } from '../core/services/token.service';
+import { TokenRefreshService } from '../core/services/token-refresh.service';
 import { Router, ActivatedRoute } from '@angular/router';
 
 @Component({
@@ -18,9 +19,17 @@ import { Router, ActivatedRoute } from '@angular/router';
           {{ sessionExpiredMessage }}
         </div>
         
-        <p>業務システムへアクセスするにはログインが必要です。</p>
-        <button class="login-btn" (click)="onLogin()">
-          ログイン
+        <!-- サイレント更新中の表示 -->
+        <div *ngIf="isRefreshing" class="alert alert-info">
+          セッションを更新中...
+        </div>
+        
+        <p *ngIf="!isRefreshing">業務システムへアクセスするにはログインが必要です。</p>
+        <button 
+          class="login-btn" 
+          (click)="onLogin()"
+          [disabled]="isRefreshing">
+          {{ isRefreshing ? '更新中...' : 'ログイン' }}
         </button>
         <p class="info">※ スタブモード: テストユーザーを選択してログインできます</p>
       </div>
@@ -49,25 +58,43 @@ import { Router, ActivatedRoute } from '@angular/router';
       border-radius: 6px; font-size: 16px; cursor: pointer; width: 100%;
     }
     .login-btn:hover { background: #005a9e; }
+    .login-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .alert-info {
+      background: #d1ecf1;
+      border: 1px solid #0c5460;
+      color: #0c5460;
+    }
     .info { font-size: 12px; color: #999; margin-top: 24px; }
   `]
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   sessionExpiredMessage: string | null = null;
+  isRefreshing = false;
 
   constructor(
     private authService: AuthService,
     private tokenService: TokenService,
+    private tokenRefreshService: TokenRefreshService,
     private router: Router,
     private route: ActivatedRoute
   ) {}
 
   ngOnInit() {
+    console.log('[LoginComponent] ページ表示開始');
+    console.log('[LoginComponent] JWT有効チェック:', this.tokenService.isTokenValid());
+    
     // 既にJWT有効ならダッシュボードへ
     if (this.tokenService.isTokenValid()) {
+      console.log('[LoginComponent] 既にJWT有効、ダッシュボードへ遷移')
       this.router.navigate(['/dashboard']);
       return;
     }
+
+    // JWT期限切れの場合、サイレント更新を試みる
+    this.trySilentRefresh();
 
     // クエリパラメータからセッション期限切れメッセージを取得
     this.route.queryParams.subscribe(params => {
@@ -77,7 +104,31 @@ export class LoginComponent {
     });
   }
 
+  /**
+   * サイレント更新を試みる
+   */
+  private trySilentRefresh() {
+    this.isRefreshing = true;
+    
+    this.tokenRefreshService.performSilentRefresh().subscribe((newToken) => {
+      this.isRefreshing = false;
+      
+      if (newToken) {
+        // 更新成功 → ダッシュボードへ
+        console.log('[LoginComponent] サイレント更新成功、ダッシュボードへ遷移');
+        this.router.navigate(['/dashboard']);
+      } else {
+        // 更新失敗 → ログインページに留まる（ユーザーに手動ログインを促す）
+        console.warn('[LoginComponent] サイレント更新失敗、ログインページを表示');
+      }
+    });
+  }
+
   onLogin() {
+    // 更新中はログインボタンを無効化
+    if (this.isRefreshing) {
+      return;
+    }
     this.authService.login();
   }
 }

@@ -1,11 +1,16 @@
 package com.auth.app.controller;
 
+import com.auth.app.exception.InternalAuthException;
+import com.auth.app.service.JwtService;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.auth.app.exception.AuthException;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 内部認証コントローラー
@@ -18,48 +23,63 @@ import com.auth.app.exception.AuthException;
 @Slf4j
 public class InternalAuthController {
 
+    private final JwtService jwtService;
+
     /**
      * POST /auth/validate
      * Entra ID subクレーム検証API
      * 
      * フロー:
-     * 1. リクエストボディからuserIdを取得（Entra ID token内のsub/oid）
-     * 2. userIdのフォーマット・有効性を検証
-     * 3. 業務システムへの認可是否存在をチェック（1秒待機）
-     * 4. 検証結果を返す
+     * 1. Authorization headerから業務JWTを取得
+     * 2. JWTの検証（形式、署名、有効期限）
+     * 3. リクエストボディからuserIdを取得（Entra ID token内のsub/oid）
+     * 4. userIdのフォーマット・有効性を検証
+     * 5. 業務システムへの認可是否存在をチェック（1秒待機）
+     * 6. 検証結果を返す
      * 
      * @param request { "userId": "ユーザー識別子" }
      * @return 検証結果
      */
     @PostMapping("/validate")
-    public ResponseEntity<ValidationResponse> validate(@RequestBody ValidationRequest request) {
+    public ResponseEntity<ValidationResponse> validate(
+            @RequestBody ValidationRequest request,
+            HttpServletRequest httpRequest) {
+        
+        // Step 1: Authorization headerからJWTを取得
+        String authHeader = httpRequest.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw InternalAuthException.tokenNotFound();
+        }
+        
+        String token = authHeader.substring(7);
+        
+        // Step 2: JWTの検証
+        try {
+            Claims claims = jwtService.validateToken(token);
+            String tokenUserId = claims.getSubject();
+            log.debug("JWT検証成功: userId={}", tokenUserId);
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT期限切れ: {}", e.getMessage());
+            throw InternalAuthException.tokenExpired();
+        } catch (JwtException e) {
+            log.warn("JWT検証失敗: {}", e.getMessage());
+            throw InternalAuthException.tokenValidationFailed(e.getMessage());
+        }
+        
+        // Step 3: userIdの必須チェック
         String userId = request.getUserId();
-        
-        log.info("sub検証開始: userId={}", userId);
-        
-        // Step 1: userIdの必須チェック
         if (userId == null || userId.isBlank()) {
             log.warn("userIdが空です");
-            return ResponseEntity.badRequest().body(
-                ValidationResponse.builder()
-                    .success(false)
-                    .message("userIdは必須です")
-                    .build()
-            );
+            throw InternalAuthException.tokenValidationFailed("userIdは必須です");
         }
         
-        // Step 2: userIdのフォーマット検証（GUID形式であることを確認）
+        // Step 4: userIdのフォーマット検証（GUID形式であることを確認）
         if (!isValidSubFormat(userId)) {
             log.warn("userIdフォーマットが無効: userId={}", userId);
-            return ResponseEntity.badRequest().body(
-                ValidationResponse.builder()
-                    .success(false)
-                    .message("userIdのフォーマットが無効です")
-                    .build()
-            );
+            throw InternalAuthException.tokenValidationFailed("userIdのフォーマットが無効です");
         }
         
-        // Step 3: 認可チェック（1秒待機）
+        // Step 5: 認可チェック（1秒待機）
         try {
             log.debug("認可チェック開始: userId={}", userId);
             Thread.sleep(1000);
@@ -67,10 +87,10 @@ public class InternalAuthController {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("待機中に割り込みが発生: userId={}", userId);
-            throw AuthException.internalAuthFailed();
+            throw InternalAuthException.tokenValidationFailed("認可チェック中にエラーが発生しました");
         }
         
-        // Step 4: 検証成功を返す
+        // Step 6: 検証成功を返す
         log.info("sub検証成功: userId={}", userId);
         return ResponseEntity.ok(
             ValidationResponse.builder()

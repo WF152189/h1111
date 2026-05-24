@@ -26,10 +26,9 @@ export type AuthErrorCode =
  * 2. MSAL.jsで認可コード受信・トークン取得
  * 3. バックエンドAPIで業務JWT取得
  * 
- * エラー処理設計:
- * - すべてHTTP 200で返す
- * - 成功: { success: true, userId, email, ... }
- * - 失敗: { success: false, message: "..." }
+ * エラー処理設計（RESTful）:
+ * - 成功: HTTP 200 + ユーザー情報
+ * - 失敗: HTTP 401/500 + ErrorResponse
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -157,7 +156,7 @@ export class AuthService {
     
     if (!verifyResult.success) {
       // Entra検証失敗（message !== SERVER_ERROR && message !== Tokenなし）→ 終了
-      if (verifyResult.message !== 'SERVER_ERROR' && verifyResult.message !== 'Tokenなし') {
+      if (verifyResult.httpStatus === 401) {
         console.warn('[runAuthFlow] Entra検証失敗（終了）:', verifyResult.message);
         this.cleanup();
         return false;
@@ -196,7 +195,7 @@ export class AuthService {
    */
   private async retryAuthFlow(operation: () => Promise<boolean>): Promise<boolean> {
     const retryKey = this.RETRY_KEY;
-    const retryCount = parseInt(sessionStorage.getItem(retryKey) || '0', 10);
+    const retryCount = Number(sessionStorage.getItem(retryKey) || '0');
     
     if (retryCount >= this.MAX_RETRY) {
       console.error('[retryAuthFlow] リトライ上限到達');
@@ -206,20 +205,31 @@ export class AuthService {
     
     // リトライカウンター増分
     sessionStorage.setItem(retryKey, String(retryCount + 1));
-    console.log('[retryAuthFlow] リトライ実行:', retryCount + 1, '/', this.MAX_RETRY);
+    
+    // 待ち時間: エクスポネンシャルバックオフ（1秒 → 2秒 → 4秒）
+    const delayMs = Math.pow(2, retryCount) * 1000;
+    console.log(`[retryAuthFlow] ${delayMs}ms 待機後リトライ:`, retryCount + 1, '/', this.MAX_RETRY);
+    
+    // 待ち時間
+    await this.delay(delayMs);
     
     // 再実行
     return operation();
   }
 
   /**
+   * 指定時間待機
+   * 
+   * @param ms - 待機時間（ミリ秒）
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
    * /auth/verify API呼び出し
    */
-  private async callVerifyApi(entraJwt: string): Promise<{
-    success: boolean;
-    message?: string;
-    userId?: string;
-  }> {
+  private async callVerifyApi(entraJwt: string): Promise<{success: boolean; message?: string; httpStatus: number;userId?: string;}> {
     try {
       // Authorization headerからトークンを取得するために observe: 'response' を使用
       const response = await firstValueFrom(
@@ -230,8 +240,9 @@ export class AuthService {
         })
       );
 
-      // success フィールドで成否を判定
-      if (response && response.body && response.body.success) {
+      // 200 が来たら成功（例外が来ない = 成功）
+      // userId が存在するかで判定
+      if (response && response.body && response.body.userId) {
         // 業務JWTをheaderから抽出して保存
         const authHeader = response.headers.get('Authorization');
         if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -240,32 +251,39 @@ export class AuthService {
           console.log('[callVerifyApi] 業務JWT保存完了');
         } else {
           console.warn('[callVerifyApi] Authorization headerなし');
-          return { success: false, message: 'Tokenなし' };
+          return { success: false, message: 'Tokenなし', httpStatus: response.status };
         }
         
         console.log('[callVerifyApi] /auth/verify成功');
         return { 
           success: true,
-          userId: response.body.userId
+          userId: response.body.userId,
+          httpStatus: response.status
         };
       } else {
-        // 失敗
-        console.warn('[callVerifyApi] /auth/verify失敗:', response?.body?.message);
-        return { success: false, message: response?.body?.message };
+        // 通常は発生しない（userId なしの200）
+        console.warn('[callVerifyApi] 予期せぬレスポンス');
+        return { success: false, message: 'userId なし', httpStatus: response.status };
       }
 
     } catch (error) {
       const httpError = error as HttpErrorResponse;
       
+      // 401: 認証エラー
+      if (httpError.status === 401) {
+        console.warn('[callVerifyApi] 認証エラー（401）:', httpError.error?.message);
+        return { success: false, message: httpError.error?.message || 'UNAUTHORIZED', httpStatus: httpError.status };
+      }
+      
       // ネットワークエラー or 5xx
       if (httpError.status === 0 || httpError.status >= 500) {
         console.error('[callVerifyApi] サーバーエラー or 通信エラー:', httpError.status);
-        return { success: false, message: 'SERVER_ERROR' };
+        return { success: false, message: httpError.error?.message || 'SERVER_ERROR', httpStatus: httpError.status };
       }
       
       // その他エラー
       console.error('[callVerifyApi] 予期せぬエラー:', httpError);
-      return { success: false, message: 'UNKNOWN' };
+      return { success: false, message: httpError.error?.message || 'UNKNOWN', httpStatus: httpError.status };
     }
   }
 
@@ -275,38 +293,48 @@ export class AuthService {
    */
   private async callValidateApi(userId: string): Promise<'success' | 'fail' | 'retry'> {
     try {
+      // 業務JWTをAuthorization headerに追加
+      const token = this.tokenService.getToken();
+      const headers: any = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await firstValueFrom(
         this.http.post<any>(`${environment.apiBaseUrl}/auth/validate`, { userId }, {
+          headers,
           withCredentials: true
         })
       );
 
-      // success フィールドで成否を判定
-      if (response && response.success) {
-        console.log('[callValidateApi] sub検証成功');
-        return 'success';
-      } else {
-        console.warn('[callValidateApi] sub検証失敗:', response?.message);
+      if (response?.body && !response.body.success) {
         return 'fail';
       }
+      // 200 が来たら成功（例外が来ない = 成功）
+      console.log('[callValidateApi] sub検証成功');
+      return 'success';
 
     } catch (error) {
       const httpError = error as HttpErrorResponse;
       
-      // 業務JWT無効（401）→ リトライ
+      // 401: 認証エラー（期限切れ、改竄、トークンなしなど）
+      // runAuthFlow で再実行すれば、callVerifyApi → callValidateApi の順で新JWTが取得される
       if (httpError.status === 401) {
-        console.warn('[callValidateApi] 業務JWT無効（401）→ リトライ');
+        console.warn('[callValidateApi] 認証エラー（401）:', httpError.error?.message);
         return 'retry';
       }
       
-      // サーバーエラー → リトライ
-      if (httpError.status >= 500) {
-        console.warn('[callValidateApi] サーバーエラー → リトライ');
+      // ネットワークエラー or 5xx: 一時的障害 → リトライ
+      if (httpError.status === 0 || httpError.status >= 500) {
+        console.error('[callValidateApi] サーバーエラー or 通信エラー:', httpError.status);
         return 'retry';
       }
       
-      // その他エラー → 終了
-      console.error('[callValidateApi] 予期せぬエラー:', httpError);
+      // 4xx その他（400, 403, 404など）: クライアントエラー → 終了
+      console.error('[callValidateApi] クライアントエラー:', httpError.status, httpError.error?.message);
       return 'fail';
     }
   }

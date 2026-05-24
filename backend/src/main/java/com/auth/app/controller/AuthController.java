@@ -32,41 +32,30 @@ public class AuthController {
      * 
      * 設計:
      * - 成功: 200 + { success: true, userId, email, ... }
-     * - 失敗: 200 + { success: false, message: "..." }
+     * - 失敗: 例外スロー → GlobalExceptionHandler が処理
      */
     @PostMapping("/verify")
     public ResponseEntity<AuthResponse> verify(
             @RequestHeader("Authorization") String authHeader,
             HttpServletResponse response) {
 
-        try {
-            String entraJwt = extractBearerToken(authHeader);
-            AuthResponse authResponse = authenticationService.verifyAndIssueTokens(entraJwt);
+        // 例外処理は GlobalExceptionHandler に委譲
+        String entraJwt = extractBearerToken(authHeader);
+        AuthResponse authResponse = authenticationService.verifyAndIssueTokens(entraJwt);
 
-            // アクセストークンをレスポンスヘッダーに設定
-            response.addHeader("Authorization", "Bearer " + authResponse.getToken());
+        // アクセストークンをレスポンスヘッダーに設定
+        response.addHeader("Authorization", "Bearer " + authResponse.getToken());
 
-            log.info("認証・JWT発行完了: userId={}", authResponse.getUserId());
-            
-            // 成功レスポンスを返す
-            return ResponseEntity.ok(AuthResponse.success(
-                    authResponse.getUserId(),
-                    authResponse.getEmail(),
-                    authResponse.getDisplayName(),
-                    authResponse.getRoles(),
-                    authResponse.getPermissions()
-            ));
-            
-        } catch (AuthException e) {
-            // Entra検証失敗は200で返す
-            log.warn("Entra JWT検証失敗: {}", e.getMessage());
-            return ResponseEntity.ok(AuthResponse.failure(e.getMessage()));
-            
-        } catch (Exception e) {
-            // サーバーエラーも200で返す
-            log.error("予期せぬエラー: {}", e.getMessage(), e);
-            return ResponseEntity.ok(AuthResponse.failure("サーバーエラー"));
-        }
+        log.info("認証・JWT発行完了: userId={}", authResponse.getUserId());
+        
+        // 成功レスポンスを返す
+        return ResponseEntity.ok(AuthResponse.success(
+                authResponse.getUserId(),
+                authResponse.getEmail(),
+                authResponse.getDisplayName(),
+                authResponse.getRoles(),
+                authResponse.getPermissions()
+        ));
     }
 
     /**

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, InjectionToken, Inject } from '@angular/core';
 import { PublicClientApplication, Configuration, AuthenticationResult, RedirectRequest, SilentRequest, INavigationClient, NavigationOptions } from '@azure/msal-browser';
 import { environment } from '../../../environments/environment';
 
@@ -57,6 +57,25 @@ export interface IMsalService {
 }
 
 /**
+ * MSALインスタンス生成ファクトリーのInjectionToken
+ */
+export const MSAL_INSTANCE_FACTORY = new InjectionToken<MsalInstanceFactory>('MSAL_INSTANCE_FACTORY');
+
+/**
+ * MSALインスタンス生成ファクトリー
+ * 
+ * テスト時にモック化できるように分離
+ */
+export type MsalInstanceFactory = (config: Configuration) => PublicClientApplication;
+
+/**
+ * デフォルトファクトリー（本番環境用）
+ */
+export function defaultMsalFactory(config: Configuration): PublicClientApplication {
+  return new PublicClientApplication(config);
+}
+
+/**
  * 本番環境用MSALサービス
  * 
  * 実際のAzure MSAL.jsライブラリを使用
@@ -66,7 +85,9 @@ export interface IMsalService {
 export class MsalService implements IMsalService {
   private msalInstance: PublicClientApplication;
 
-  constructor() {
+  constructor(
+    @Inject(MSAL_INSTANCE_FACTORY) private msalFactory: MsalInstanceFactory = defaultMsalFactory
+  ) {
     // カスタムナビゲーションクライアント（MSALの内部ナビゲーションを制御）
     const customNavigationClient: INavigationClient = {
       // 内部ナビゲーション（SPA内のページ遷移）
@@ -98,7 +119,7 @@ export class MsalService implements IMsalService {
         prompt: 'select_account'  // 毎回アカウント選択を強制
       },
       cache: {
-        cacheLocation: 'sessionStorage',  // セッションストレージ使用
+        cacheLocation: 'localStorage',  // セッションストレージ使用
         storeAuthStateInCookie: false  // Cookieに認証状態を保存しない（ページリロード防止）
       },
       system: {
@@ -135,15 +156,19 @@ export class MsalService implements IMsalService {
     console.log('[MsalService] storeAuthStateInCookie:', (msalConfig.cache as any).storeAuthStateInCookie);
     console.log('[MsalService] customNavigationClient 設定済み');
 
-    // MSALインスタンス生成
-    this.msalInstance = new PublicClientApplication(msalConfig);
-    
-    // 初期化を実行（handleRedirectPromiseの前に完了している必要がある）
-    this.msalInstance.initialize().then(() => {
-      console.log('[MsalService] MSAL初期化完了');
-    }).catch((error) => {
-      console.error('[MsalService] MSAL初期化エラー:', error);
-    });
+    // MSALインスタンス生成（ファクトリー経由）
+    this.msalInstance = this.msalFactory(msalConfig);
+  }
+
+  /**
+   * MSALインスタンスの初期化
+   * 
+   * APP_INITIALIZER から呼び出す
+   */
+  async initialize(): Promise<void> {
+    console.log('[MsalService] MSAL初期化開始');
+    await this.msalInstance.initialize();
+    console.log('[MsalService] MSAL初期化完了');
   }
 
   /**

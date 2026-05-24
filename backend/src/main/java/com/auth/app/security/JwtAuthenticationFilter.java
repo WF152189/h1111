@@ -77,6 +77,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
+        // /auth/validate は内部でJWT検証するため、フィルターでは除外
+        // 他の /auth/* も除外（ログイン、verify など）
         return path.startsWith("/auth/") ||
                path.startsWith("/stub/") ||
                path.startsWith("/h2-console");

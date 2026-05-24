@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { PermissionErrorService } from '../core/services/permission-error.service';
 
 @Component({
   selector: 'app-forbidden-error',
@@ -44,16 +45,25 @@ export class ForbiddenErrorComponent implements OnInit {
 
   constructor(
     private router: Router,
-    private route: ActivatedRoute
+    private permissionErrorService: PermissionErrorService
   ) {}
 
   ngOnInit() {
-    // クエリパラメータから画面IDと拒否理由を取得
-    this.screenId = this.route.snapshot.queryParamMap.get('screenId');
-    this.reason = this.route.snapshot.queryParamMap.get('reason');
+    // PermissionErrorService からエラー情報を取得
+    const error = this.permissionErrorService.getError();
+    
+    if (error) {
+      this.screenId = error.screenId;
+      this.reason = error.reason;
+      console.log('[ForbiddenErrorComponent] 権限エラー情報取得:', error);
+    } else {
+      console.warn('[ForbiddenErrorComponent] 権限エラー情報が見つからない');
+    }
   }
 
   goToDashboard() {
+    // エラー情報をクリア
+    this.permissionErrorService.clearError();
     this.router.navigate(['/dashboard']);
   }
 }
