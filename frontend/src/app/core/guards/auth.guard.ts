@@ -54,7 +54,9 @@ export const AuthChildGuard: CanActivateChildFn = (
  * Angular DI コンテナに登録され、関数型ガードから委譲される。
  * CanActivate と CanActivateChild の両方を実装。
  */
-@Injectable()
+@Injectable({
+  providedIn: 'root'
+})
 export class AuthGuardT implements CanActivate, CanActivateChild {
   constructor(
     private tokenService: TokenService,

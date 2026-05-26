@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { CanActivate, CanActivateChild, CanActivateFn, CanActivateChildFn, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { CanActivate, CanActivateChild, CanActivateFn, CanActivateChildFn, ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
 import { ScreenPermissionService } from '../services/screen-permission.service';
 import { PermissionErrorService } from '../services/permission-error.service';
 
@@ -62,7 +62,8 @@ export class PermissionGuardT implements CanActivate, CanActivateChild {
 
   constructor(
     private screenPermissionService: ScreenPermissionService,
-    private permissionErrorService: PermissionErrorService
+    private permissionErrorService: PermissionErrorService,
+    private router: Router
   ) {}
 
   /**
@@ -76,7 +77,7 @@ export class PermissionGuardT implements CanActivate, CanActivateChild {
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
   ): Promise<boolean> {
-    return this.checkPermission(route);
+    return this.checkPermission(route, state);
   }
 
   /**
@@ -90,16 +91,17 @@ export class PermissionGuardT implements CanActivate, CanActivateChild {
     childRoute: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
   ): Promise<boolean> {
-    return this.checkPermission(childRoute);
+    return this.checkPermission(childRoute, state);
   }
 
   /**
    * 共通権限チェックロジック
    * 
    * @param route - ルートのスナップショット
+   * @param state - ルーターの現在の状態（遷移元URLを含む）
    * @returns `true`（アクセス許可）または `false`（アクセス拒否、エラーメッセージ表示）
    */
-  private async checkPermission(route: ActivatedRouteSnapshot): Promise<boolean> {
+  private async checkPermission(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<boolean> {
     const screenId: string = route.data?.['screenId'];
     
     // 画面IDが設定されていない場合は許可（デフォルト）
@@ -116,12 +118,27 @@ export class PermissionGuardT implements CanActivate, CanActivateChild {
       return true;
     }
   
-    // アクセス拒否：エラー情報を保存して画面遷移をブロック
+    // アクセス拒否：エラー情報を保存して遷移元画面にリダイレクト
     console.warn('画面アクセスが拒否されました:', screenId, result.reason);
+    
+    // エラー情報をセッションに保存
     this.permissionErrorService.setPermissionError({
       screenId: screenId,
       reason: result.reason || 'この画面にアクセスする権限がありません。'
     });
+    
+    // 遷移元URLを取得（state.url）またはデフォルト
+    const returnUrl = state.url || '/dashboard';
+    console.log('[PermissionGuard] 遷移元URL:', returnUrl);
+    
+    // 遷移元画面に戻る（クエリパラメータでエラー理由を渡す）
+    this.router.navigate([returnUrl], {
+      queryParams: {
+        error: 'permission_denied',
+        message: result.reason || 'この画面にアクセスする権限がありません。'
+      }
+    });
+    
     return false;
   }
 }

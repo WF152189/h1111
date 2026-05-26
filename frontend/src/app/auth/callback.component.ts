@@ -60,9 +60,17 @@ export class CallbackComponent implements OnInit {
     private authService: AuthService
   ) {}
 
-  async ngOnInit() {
+  ngOnInit() {
     console.log('[CallbackComponent] ngOnInit開始、URL:', window.location.href);
     
+    // 非同期処理を実行（voidを返す）
+    this.handleCallbackAsync();
+  }
+
+  /**
+   * 非同期コールバック処理
+   */
+  private async handleCallbackAsync(): Promise<void> {
     try {
       // MSALパターン: パラメータはMSALが自動処理
       // handleCallback()内部でhandleRedirectPromise()が認可コードを検出

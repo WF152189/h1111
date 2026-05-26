@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { TokenService } from './token.service';
@@ -32,15 +32,27 @@ export type AuthErrorCode =
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private msalService = inject(MSAL_SERVICE);
-  private http = inject(HttpClient);
-  private router = inject(Router);
-  private tokenService = inject(TokenService);
+  private msalService: IMsalService;
+  private http: HttpClient;
+  private router: Router;
+  private tokenService: TokenService;
 
   // sessionStorage keys
   private readonly RETRY_KEY = 'auth_callback_retry';
   private readonly ENTRA_JWT_KEY = 'entra_jwt';
   private readonly MAX_RETRY = 1;
+
+  constructor(
+    msalService: IMsalService,
+    http: HttpClient,
+    router: Router,
+    tokenService: TokenService
+  ) {
+    this.msalService = msalService;
+    this.http = http;
+    this.router = router;
+    this.tokenService = tokenService;
+  }
 
   /**
    * ログイン開始
