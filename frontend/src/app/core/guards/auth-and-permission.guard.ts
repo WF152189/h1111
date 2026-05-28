@@ -25,22 +25,24 @@ import { PermissionGuardT } from './permission.guard';
  * @param state - ルーターの現在の状態
  * @returns `true`（アクセス許可）または `false`（アクセス拒否）
  */
-export const authAndPermissionGuard: CanActivateFn = async (
+export const authAndPermissionGuard: CanActivateFn = (
   route: ActivatedRouteSnapshot,
   state: RouterStateSnapshot
 ) => {
-  // 1. AuthGuard を実行（認証チェック）
+  // inject() は同期的なコンテキストで呼び出す必要がある
   const authGuard = inject(AuthGuardT);
-  const authResult = await authGuard.canActivate(route, state);
+  const permGuard = inject(PermissionGuardT);
   
-  // 2. AuthGuard が true の場合のみ PermissionGuard を実行
-  if (authResult === true) {
-    const permGuard = inject(PermissionGuardT);
-    return await permGuard.canActivate(route, state);
-  }
-  
-  // AuthGuard が false の場合はそのまま返す（PermissionGuard は実行されない）
-  return authResult;
+  // 非同期処理は Promise チェーンで実行
+  return authGuard.canActivate(route, state).then((authResult) => {
+    // AuthGuard が true の場合のみ PermissionGuard を実行
+    if (authResult === true) {
+      return permGuard.canActivate(route, state);
+    }
+    
+    // AuthGuard が false の場合はそのまま返す
+    return authResult;
+  });
 };
 
 /**
@@ -61,20 +63,22 @@ export const authAndPermissionGuard: CanActivateFn = async (
  * @param state - ルーターの現在の状態
  * @returns `true`（アクセス許可）または `false`（アクセス拒否）
  */
-export const authAndPermissionChildGuard: CanActivateChildFn = async (
+export const authAndPermissionChildGuard: CanActivateChildFn = (
   childRoute: ActivatedRouteSnapshot,
   state: RouterStateSnapshot
 ) => {
-  // 1. AuthGuard を実行（認証チェック）
+  // inject() は同期的なコンテキストで呼び出す必要がある
   const authGuard = inject(AuthGuardT);
-  const authResult = await authGuard.canActivate(childRoute, state);
+  const permGuard = inject(PermissionGuardT);
   
-  // 2. AuthGuard が true の場合のみ PermissionGuard を実行
-  if (authResult === true) {
-    const permGuard = inject(PermissionGuardT);
-    return await permGuard.canActivateChild(childRoute, state);
-  }
-  
-  // AuthGuard が false の場合はそのまま返す（PermissionGuard は実行されない）
-  return authResult;
+  // 非同期処理は Promise チェーンで実行
+  return authGuard.canActivate(childRoute, state).then((authResult) => {
+    // AuthGuard が true の場合のみ PermissionGuard を実行
+    if (authResult === true) {
+      return permGuard.canActivateChild(childRoute, state);
+    }
+    
+    // AuthGuard が false の場合はそのまま返す
+    return authResult;
+  });
 };

@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authAndPermissionGuard, authAndPermissionChildGuard } from './core/guards/auth-and-permission.guard';
+import { AuthGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -14,7 +15,7 @@ export const routes: Routes = [
   {
     path: 'dashboard',
     loadComponent: () => import('./business/dashboard.component').then(m => m.DashboardComponent),
-    canActivate: [authAndPermissionGuard]
+    canActivate: [AuthGuard]
   },
   {
     path: 'menu',
