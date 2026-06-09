@@ -1,6 +1,7 @@
 package com.auth.app.controller;
 
 import com.auth.app.exception.InternalAuthException;
+import com.auth.app.service.InternalAuthService;
 import com.auth.app.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -25,6 +26,7 @@ import jakarta.servlet.http.HttpServletRequest;
 public class InternalAuthController {
 
     private final JwtService jwtService;
+    private final InternalAuthService internalAuthService;
     
     @Value("${stub.enabled}")
     private boolean stubEnabled;
@@ -96,16 +98,8 @@ public class InternalAuthController {
             throw InternalAuthException.tokenValidationFailed("userIdのフォーマットが無効です");
         }
         
-        // Step 5: 認可チェック（1秒待機）
-        try {
-            log.debug("認可チェック開始: userId={}", userId);
-            Thread.sleep(1000);
-            log.debug("認可チェック完了: userId={}", userId);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("待機中に割り込みが発生: userId={}", userId);
-            throw InternalAuthException.tokenValidationFailed("認可チェック中にエラーが発生しました");
-        }
+        // Step 5: 外部認可システムで認可チェック
+        internalAuthService.checkAuthorization(userId);
         
         // Step 6: 検証成功を返す
         log.info("sub検証成功: userId={}", userId);

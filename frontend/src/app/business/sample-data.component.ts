@@ -4,13 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { ApiService } from '../core/services/api.service';
 import { PermissionService } from '../core/services/permission.service';
+import { AppRouterLinkDirective } from '../shared/directives/app-router-link.directive';
 
 @Component({
     selector: 'app-sample-data',
-    imports: [CommonModule, FormsModule, RouterModule],
+    imports: [CommonModule, FormsModule, RouterModule, AppRouterLinkDirective],
     template: `
     <div class="data-page">
-      <a routerLink="/dashboard" class="back-link">← ダッシュボードに戻る</a>
+      <a appRouterLink="/dashboard" class="back-link">← ダッシュボードに戻る</a>
       <h1>📋 業務データ管理</h1>
 
       <!-- データ一覧 -->

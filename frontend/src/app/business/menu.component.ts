@@ -2,13 +2,14 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { ApiService } from '../core/services/api.service';
+import { AppRouterLinkDirective } from '../shared/directives/app-router-link.directive';
 
 @Component({
     selector: 'app-menu',
-    imports: [CommonModule, RouterModule],
+    imports: [CommonModule, RouterModule, AppRouterLinkDirective],
     template: `
     <div class="menu-page">
-      <a routerLink="/dashboard" class="back-link">← ダッシュボードに戻る</a>
+      <a appRouterLink="/dashboard" class="back-link">← ダッシュボードに戻る</a>
       <h1>📑 権限情報確認</h1>
 
       <div class="section" *ngIf="permData">

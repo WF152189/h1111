@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, RouterOutlet } from '@angular/router';
+import { AppRouterLinkDirective } from '../../shared/directives/app-router-link.directive';
 
 /**
  * 設定画面 親コンポーネント
@@ -11,10 +12,10 @@ import { RouterModule, RouterOutlet } from '@angular/router';
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [CommonModule, RouterModule, RouterOutlet],
+  imports: [CommonModule, RouterModule, RouterOutlet, AppRouterLinkDirective],
   template: `
     <div class="settings-page">
-      <a routerLink="/dashboard" class="back-link">← ダッシュボードに戻る</a>
+      <a appRouterLink="/dashboard" class="back-link">← ダッシュボードに戻る</a>
       <h1>⚙️ 設定</h1>
 
       <div class="settings-container">
@@ -23,22 +24,22 @@ import { RouterModule, RouterOutlet } from '@angular/router';
           <h2>設定メニュー</h2>
           <ul>
             <li>
-              <a routerLink="/settings/user" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+              <a appRouterLink="/settings/user" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
                 👤 ユーザー設定
               </a>
             </li>
             <li>
-              <a routerLink="/settings/system" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+              <a appRouterLink="/settings/system" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
                 🖥️ システム設定
               </a>
             </li>
             <li>
-              <a routerLink="/settings/security" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+              <a appRouterLink="/settings/security" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
                 🔒 セキュリティ設定
               </a>
             </li>
             <li>
-              <a routerLink="/settings/notification" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+              <a appRouterLink="/settings/notification" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
                 🔔 通知設定
               </a>
             </li>

@@ -5,10 +5,11 @@ import { TokenService } from '../core/services/token.service';
 import { PermissionService } from '../core/services/permission.service';
 import { AuthService } from '../core/services/auth.service';
 import { ApiService } from '../core/services/api.service';
+import { AppRouterLinkDirective } from '../shared/directives/app-router-link.directive';
 
 @Component({
     selector: 'app-dashboard',
-    imports: [CommonModule, RouterModule],
+    imports: [CommonModule, RouterModule, AppRouterLinkDirective],
     template: `
     <div class="dashboard">
       <header>
@@ -23,13 +24,13 @@ import { ApiService } from '../core/services/api.service';
       <nav class="menu">
         <h2>メニュー</h2>
         <div class="menu-items">
-          <a routerLink="/business/data" class="menu-item" *ngIf="hasPermission('user:read')">
+          <a appRouterLink="/business/data" class="menu-item" *ngIf="hasPermission('user:read')">
             📋 業務データ管理
           </a>
-          <a routerLink="/menu" class="menu-item">
+          <a appRouterLink="/menu" class="menu-item">
             📑 権限情報確認
           </a>
-          <a routerLink="/admin/management" class="menu-item admin-menu" *ngIf="isAdmin()">
+          <a appRouterLink="/admin/management" class="menu-item admin-menu" *ngIf="isAdmin()">
             ⚙️ 管理者用管理画面
           </a>
           
@@ -47,16 +48,16 @@ import { ApiService } from '../core/services/api.service';
               *ngIf="showSettingsDropdown"
               #dropdownContent
               role="menu">
-              <a routerLink="/settings/user" class="dropdown-item" (click)="hideSettingsDropdown()" role="menuitem">
+              <a appRouterLink="/settings/user" class="dropdown-item" (click)="hideSettingsDropdown()" role="menuitem">
                 👤 ユーザー設定
               </a>
-              <a routerLink="/settings/system" class="dropdown-item" (click)="hideSettingsDropdown()" role="menuitem">
+              <a appRouterLink="/settings/system" class="dropdown-item" (click)="hideSettingsDropdown()" role="menuitem">
                 🖥️ システム設定
               </a>
-              <a routerLink="/settings/security" class="dropdown-item" (click)="hideSettingsDropdown()" role="menuitem">
+              <a appRouterLink="/settings/security" class="dropdown-item" (click)="hideSettingsDropdown()" role="menuitem">
                 🔒 セキュリティ設定
               </a>
-              <a routerLink="/settings/notification" class="dropdown-item" (click)="hideSettingsDropdown()" role="menuitem">
+              <a appRouterLink="/settings/notification" class="dropdown-item" (click)="hideSettingsDropdown()" role="menuitem">
                 🔔 通知設定
               </a>
             </div>

@@ -42,6 +42,9 @@ export class AuthService {
   private readonly ENTRA_JWT_KEY = 'entra_jwt';
   private readonly MAX_RETRY = 1;
 
+  // プログラム遷移フラグ（AuthGuard で直接アクセスとプログラム遷移を識別）
+  isProgrammaticNavigation: boolean = false;
+
   constructor(
     @Inject(MSAL_SERVICE) msalService: IMsalService,
     http: HttpClient,
@@ -70,54 +73,31 @@ export class AuthService {
    * コールバック処理: MSALトークン取得 → 業務JWT取得
    * 
    * フロー:
-   * 1. handleRedirectPromise() でEntra JWT取得（初回のみ）
-   * 2. Entra JWTをsessionStorageに保存
-   * 3. POST /auth/verify で業務JWT取得
-   * 4. POST /auth/validate でsub検証
+   * 1. handleRedirectPromise() でEntra JWT取得
+   * 2. POST /auth/verify で業務JWT取得
+   * 3. POST /auth/validate でsub検証
    * 
    * リトライ設計:
-   * - リトライ時は保存されたEntra JWTを使用（handleRedirectPromise()不要）
-   * - 無限ループ防止のため、最大1回リトライ
+   * - runAuthFlow() 内でエラー発生時、retryAuthFlow() により runAuthFlow() が直接再実行される
+   * - handleCallback() は再呼び出しされない
+   * - 無限ループ防止のため、最大3回リトライ
    */
   async handleCallback(): Promise<boolean> {
-    const retryKey = this.RETRY_KEY;
     const entraJwtKey = this.ENTRA_JWT_KEY;
 
     try {
-      // リトライカウンター確認
-      const retryCount = parseInt(sessionStorage.getItem(retryKey) || '0', 10);
-      
       // Entra JWT取得
-      let entraJwt: string;
+      console.log('[handleCallback] 実行');
+      const msalResult = await this.msalService.handleRedirectPromise();
       
-      if (retryCount === 0) {
-        // 【初回】handleRedirectPromise() を使用
-        console.log('[handleCallback] 初回実行');
-        const msalResult = await this.msalService.handleRedirectPromise();
-        
-        if (!msalResult) {
-          console.error('[handleCallback] MSAL result is null');
-          return false;
-        }
-        
-        entraJwt = msalResult.idToken;
-        sessionStorage.setItem(entraJwtKey, entraJwt);
-        console.log('[handleCallback] Entra JWT保存完了');
-      } else {
-        // 【リトライ】保存された Entra JWT を使用
-        console.log('[handleCallback] リトライ実行');
-        const cachedJwt = sessionStorage.getItem(entraJwtKey);
-        
-        if (!cachedJwt) {
-          console.error('[handleCallback] 保存されたEntra JWTがない');
-          this.cleanup();
-          this.login();
-          return false;
-        }
-        
-        entraJwt = cachedJwt;
-        console.log('[handleCallback] 保存されたEntra JWTを使用');
+      if (!msalResult) {
+        console.error('[handleCallback] MSAL result is null');
+        return false;
       }
+      
+      const entraJwt = msalResult.idToken;
+      sessionStorage.setItem(entraJwtKey, entraJwt);
+      console.log('[handleCallback] Entra JWT保存完了');
 
       // 共通認証フロー実行
       return await this.runAuthFlow(entraJwt);

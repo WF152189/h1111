@@ -1,29 +1,36 @@
-import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { HttpInterceptorFn, HttpErrorResponse, HttpHandlerFn, HttpRequest, HttpContextToken } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, switchMap, throwError, Observable, EMPTY } from 'rxjs';
-import { TokenService } from '../services/token.service';
+import { catchError, switchMap, throwError, Observable, EMPTY, from } from 'rxjs';
 import { TokenRefreshService } from '../services/token-refresh.service';
 
 /**
- * エラー処理interceptor（キュー方式）
+ * リトライ済みフラグ（HttpContextToken）
+ * 
+ * 無限ループ防止用:
+ * - 401リトライ時にこのフラグを true に設定
+ * - 2回目の401ではこのフラグをチェックしてログインページへ
+ */
+export const RETRY_TOKEN = new HttpContextToken<boolean>(() => false);
+
+/**
+ * エラー処理interceptor（Promiseベース）
  * 
  * 責務:
  * - 業務API（/auth/ と /stub/ を除いたURL）のエラーを処理
- * - 401: サイレント更新 → リトライ
+ * - 401: サイレント更新 → リトライ（1回のみ）
  * - 403: 権限エラーページへ
  * 
  * 設計原則:
  * - 認証API（/auth/*）のエラーは直接透過（ここでは処理しない）
  * - 認証エラーは auth.service.ts で個別処理
  * 
- * キュー方式:
- * - 同時リクエストが発生しても、1回のサイレント更新で全て処理
- * - BehaviorSubject で更新状態を共有
+ * 無限ループ防止:
+ * - リトライ後も401が返された場合、ログインページへリダイレクト
+ * - context に 'retry' フラグを設定してリトライ済みを追跡
  */
 export const errorInterceptor: HttpInterceptorFn = (req, next): Observable<any> => {
   const router = inject(Router);
-  const tokenService = inject(TokenService);
   const tokenRefreshService = inject(TokenRefreshService);
 
   // 認証系・スタブ系APIのエラーは処理しない（直接透過）
@@ -37,10 +44,19 @@ export const errorInterceptor: HttpInterceptorFn = (req, next): Observable<any> 
   // 業務APIのエラーを処理
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
+      console.log('[errorInterceptor] catchError called, status:', error.status, 'RETRY_TOKEN:', req.context.get(RETRY_TOKEN));
+      
       if (error.status === 401) {
+        // リトライ済みの場合はログインページへ
+        if (req.context.get(RETRY_TOKEN)) {
+          console.warn('[errorInterceptor] リトライ後も401エラー、ログインページへリダイレクト');
+          redirectToLogin(router);
+          return EMPTY;
+        }
+
         // 業務JWT無効 → サイレント更新
         console.warn('[errorInterceptor] 401エラー: サイレント更新開始');
-        return handle401Error(req, next, tokenRefreshService, tokenService, router);
+        return handle401Error(req, next, tokenRefreshService, router);
         
       } else if (error.status === 403) {
         // 権限エラー → forbidden ページ
@@ -57,21 +73,26 @@ export const errorInterceptor: HttpInterceptorFn = (req, next): Observable<any> 
 };
 
 /**
- * 401エラー処理（キュー方式）
+ * 401エラー処理（Promiseベース）
  * 
  * フロー:
  * 1. TokenRefreshService でサイレント更新
- * 2. 成功したら新JWTでリクエスト再試行
+ * 2. 成功したら新JWTでリクエスト再試行（retryフラグ付き）
  * 3. 失敗したらログインページへ
  */
 function handle401Error(
-  req: any,
-  next: any,
+  req: HttpRequest<any>,
+  next: HttpHandlerFn,
   tokenRefreshService: TokenRefreshService,
-  tokenService: TokenService,
   router: Router
-) {
-  return tokenRefreshService.performSilentRefresh().pipe(
+): Observable<any> {
+  // Promise を Observable に変換
+  return from(tokenRefreshService.performSilentRefresh()).pipe(
+    catchError((error) => {
+      console.error('[errorInterceptor] サイレント更新エラー、ログインページへリダイレクト', error);
+      redirectToLogin(router);
+      return EMPTY;
+    }),
     switchMap((newToken: string | null) => {
       if (!newToken) {
         // 更新失敗 → ログインページへ
@@ -81,12 +102,23 @@ function handle401Error(
         return EMPTY;
       }
 
-      // 新JWTでリクエスト再試行
-      console.log('[errorInterceptor] トークン更新成功、リトライ');
+      // 新JWTでリクエスト再試行（retryフラグを設定）
+      console.info('[errorInterceptor] トークン更新成功、リトライ');
       const retryReq = req.clone({
-        setHeaders: { Authorization: `Bearer ${newToken}` }
+        setHeaders: { Authorization: `Bearer ${newToken}` },
+        context: req.context.set(RETRY_TOKEN, true)  // リトライ済みフラグ
       });
-      return next(retryReq);
+      return next(retryReq).pipe(
+        catchError((retryError: HttpErrorResponse) => {
+          if (retryError.status === 401) {
+            console.warn('[errorInterceptor] リトライ後も401エラー、ログインページへリダイレクト');
+            redirectToLogin(router);
+            return EMPTY;
+          }
+
+          return throwError(() => retryError);
+        })
+      );
     })
   );
 }

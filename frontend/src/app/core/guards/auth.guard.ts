@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { CanActivate, CanActivateChild, CanActivateFn, CanActivateChildFn, Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { TokenService } from '../services/token.service';
 import { TokenRefreshService } from '../services/token-refresh.service';
-import { firstValueFrom } from 'rxjs';
+import { AuthService } from '../services/auth.service';
 
 /**
  * 認証ガード（関数型 + クラス委譲パターン）
@@ -61,7 +61,8 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
   constructor(
     private tokenService: TokenService,
     private tokenRefreshService: TokenRefreshService,
-    private router: Router
+    private router: Router,
+    private authService: AuthService
   ) {}
 
   /**
@@ -107,18 +108,16 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
   /**
    * 共通認証チェックロジック
    * 
+   * JWTが無効な場合:
+   * - プログラム遷移（メニュークリック等） → /login ページへリダイレクト
+   * - 直接アクセス（URL直接入力等） → Entra ID認証を直接実行
+   * 
    * @param state - ルーターの現在の状態
    * @returns `true`（アクセス許可）または `false`（認証失敗、既にリダイレクト済み）
    */
   private async checkAuth(state: RouterStateSnapshot): Promise<boolean> {
     // JWT有効ならアクセス許可
     console.log('[AuthGuard] checkAuth 開始 - url:', state.url);
-    
-    // callbackページは認証チェックをスキップ
-    if (state.url.includes('/callback')) {
-      console.log('[AuthGuard] callbackページのため認証チェックスキップ');
-      return true;
-    }
     
     const isValid = this.tokenService.isTokenValid();
     console.log('[AuthGuard] checkAuth:', state.url, 'tokenValid:', isValid);
@@ -130,9 +129,7 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
 
     // JWT無効 → TokenRefreshService でサイレント更新
     try {
-      const newToken = await firstValueFrom(
-        this.tokenRefreshService.performSilentRefresh()
-      );
+      const newToken = await this.tokenRefreshService.performSilentRefresh();
 
       if (newToken) {
         console.log('[AuthGuard] サイレント更新成功、アクセス許可');
@@ -144,21 +141,29 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
       console.warn('[AuthGuard] サイレント更新失敗:', error);
     }
 
-    // サイレント更新失敗 → ログインページへリダイレクト
-    console.warn('[AuthGuard] 認証失敗、ログインページへリダイレクト完了時刻:', Date.now());
+    // ⭐ プログラム遷移フラグを読み取って、直後にリセット
+    const isRouterNavigate = this.authService.isProgrammaticNavigation;
+    this.authService.isProgrammaticNavigation = false;
     
-    // 注意: ログイン成功後も元のURLには戻らない
-    // 理由: ページロードでAngularコンポーネントのデータが失われるため
+    console.log('[AuthGuard] 遷移判定:', isRouterNavigate ? 'プログラム遷移' : '直接アクセス');
+
+    if (isRouterNavigate) {
+      // プログラム遷移 → /login ページへリダイレクト
+      console.warn('[AuthGuard] プログラム遷移、ログインページへリダイレクト');
+      this.router.navigate(['/login'], {
+        queryParams: { 
+          reason: 'session_expired',
+          message: 'セッションの有効期限が切れました。再度ログインしてください。'
+        }
+      });
+    } else {
+      // 直接アクセス → Entra ID認証を直接実行
+      console.warn('[AuthGuard] 直接アクセス、Entra ID認証を直接実行');
+      sessionStorage.setItem('redirect_url', state.url);
+      this.authService.login();
+    }
     
-    // 再ログインが必要な旨をメッセージとして渡す
-    this.router.navigate(['/login'], {
-      queryParams: { 
-        reason: 'session_expired',
-        message: 'セッションの有効期限が切れました。再度ログインしてください。'
-      }
-    });
-    
-    // このreturnは実行されない（既にページ全体リダイレクトが発生済み）
+    // このreturnは実行されない（既にリダイレクトが発生済み）
     // AngularのCanActivateインターフェース契約を満たすための形式
     return false;
   }

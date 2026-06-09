@@ -80,8 +80,6 @@ export class CallbackComponent implements OnInit {
       
       if (success) {
         // 認証成功 → 常にダッシュボードへ
-        // 注意: redirect_url は使用しない
-        // 理由: ページロードでAngularコンポーネントのデータが失われるため
         console.log('[CallbackComponent] ダッシュボードへ遷移');
         this.router.navigate(['/dashboard']);
       } else {

@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { TokenService } from '../core/services/token.service';
+import { AppRouterLinkDirective } from '../shared/directives/app-router-link.directive';
 
 /**
  * 管理者用管理画面コンポーネント
@@ -12,10 +13,10 @@ import { TokenService } from '../core/services/token.service';
 @Component({
   selector: 'app-admin-management',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, AppRouterLinkDirective],
   template: `
     <div class="admin-page">
-      <a routerLink="/dashboard" class="back-link">← ダッシュボードに戻る</a>
+      <a appRouterLink="/dashboard" class="back-link">← ダッシュボードに戻る</a>
       <h1>⚙️ 管理者用管理画面</h1>
       <p class="welcome">管理者ユーザー: <strong>{{ userId }}</strong></p>
 

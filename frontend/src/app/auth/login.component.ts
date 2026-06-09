@@ -106,11 +106,13 @@ export class LoginComponent implements OnInit {
 
   /**
    * サイレント更新を試みる
+   * 失敗した場合は自動的にEntra ID認証を開始
    */
-  private trySilentRefresh() {
+  private async trySilentRefresh() {
     this.isRefreshing = true;
     
-    this.tokenRefreshService.performSilentRefresh().subscribe((newToken) => {
+    try {
+      const newToken = await this.tokenRefreshService.performSilentRefresh();
       this.isRefreshing = false;
       
       if (newToken) {
@@ -118,10 +120,23 @@ export class LoginComponent implements OnInit {
         console.log('[LoginComponent] サイレント更新成功、ダッシュボードへ遷移');
         this.router.navigate(['/dashboard']);
       } else {
-        // 更新失敗 → ログインページに留まる（ユーザーに手動ログインを促す）
-        console.warn('[LoginComponent] サイレント更新失敗、ログインページを表示');
+        // 更新失敗 → 自動的にEntra ID認証を開始
+        console.log('[LoginComponent] サイレント更新失敗、Entra ID認証を自動開始');
+        this.autoLogin();
       }
-    });
+    } catch (error) {
+      this.isRefreshing = false;
+      console.error('[LoginComponent] サイレント更新エラー:', error);
+      this.autoLogin();
+    }
+  }
+
+  /**
+   * 自動ログイン（Entra ID認証を自動開始）
+   */
+  private autoLogin() {
+    console.log('[LoginComponent] 自動ログイン開始');
+    this.authService.login();
   }
 
   onLogin() {

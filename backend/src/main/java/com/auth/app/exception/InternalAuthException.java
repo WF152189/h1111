@@ -64,4 +64,15 @@ public class InternalAuthException extends RuntimeException {
             401
         );
     }
+    
+    /**
+     * 認可失敗（外部認可システム）
+     */
+    public static InternalAuthException authorizationFailed(String message) {
+        return new InternalAuthException(
+            "AUTHORIZATION_FAILED",
+            message != null ? message : "認可に失敗しました",
+            403
+        );
+    }
 }
