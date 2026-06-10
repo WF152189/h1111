@@ -27,7 +27,7 @@ describe('TokenRefreshService', () => {
         const mockBusinessJwt = 'business-jwt-456';
 
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve(mockEntraJwt));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
         tokenServiceSpy.getToken.and.returnValue(mockBusinessJwt);
 
         // Act
@@ -58,7 +58,7 @@ describe('TokenRefreshService', () => {
       it('handleCallbackWithEntraJwt 失敗 → null を返す', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(false));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: false, errorMessage: 'auth failed' }));
 
         // Act
         service.performSilentRefresh().then((result) => {
@@ -74,7 +74,7 @@ describe('TokenRefreshService', () => {
       it('getToken でJWTなし → null を返す', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
         tokenServiceSpy.getToken.and.returnValue(null);
 
         // Act
@@ -120,7 +120,7 @@ describe('TokenRefreshService', () => {
       it('getToken が例外を投げる → null を返す', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
         tokenServiceSpy.getToken.and.throwError(new Error('トークン読み取りエラー'));
 
         // Act
@@ -165,7 +165,7 @@ describe('TokenRefreshService', () => {
       it('更新成功後に refreshPromise が null に戻る', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
         tokenServiceSpy.getToken.and.returnValue('jwt');
 
         // Act
@@ -191,7 +191,7 @@ describe('TokenRefreshService', () => {
       it('handleCallbackWithEntraJwt 失敗後も refreshPromise が null に戻る', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(false));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: false, errorMessage: 'auth failed' }));
 
         // Act
         service.performSilentRefresh().then(() => {
@@ -217,7 +217,7 @@ describe('TokenRefreshService', () => {
       it('getToken 例外後も refreshPromise が null に戻る', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
         tokenServiceSpy.getToken.and.throwError(new Error('エラー'));
 
         // Act
@@ -231,7 +231,7 @@ describe('TokenRefreshService', () => {
       it('getToken が null を返した後、refreshPromise が null に戻る', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
         tokenServiceSpy.getToken.and.returnValue(null);
 
         // Act
@@ -247,7 +247,7 @@ describe('TokenRefreshService', () => {
       it('固定スコープで acquireTokenSilent を呼び出す', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
         tokenServiceSpy.getToken.and.returnValue('jwt');
 
         // Act
@@ -265,7 +265,7 @@ describe('TokenRefreshService', () => {
       it('更新中は refreshPromise が設定される', (done) => {
         // Arrange
         msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+        authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
         tokenServiceSpy.getToken.and.returnValue('jwt');
 
         // Act
@@ -301,7 +301,7 @@ describe('TokenRefreshService', () => {
       const mockBusinessJwt = 'business-jwt-456';
 
       msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve(mockEntraJwt));
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.returnValue(mockBusinessJwt);
 
       // Act: 1回目のリクエスト
@@ -326,7 +326,7 @@ describe('TokenRefreshService', () => {
       const mockBusinessJwt = 'business-jwt-456';
 
       msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve(mockEntraJwt));
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.returnValue(mockBusinessJwt);
 
       // Act: 1回目のリクエスト完了後、2回目を連続実行
@@ -368,7 +368,7 @@ describe('TokenRefreshService', () => {
           setTimeout(() => resolve(mockEntraJwt), 100);
         });
       });
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.returnValue(mockBusinessJwt);
 
       // Act: 2つのリクエストを同時に実行
@@ -417,7 +417,7 @@ describe('TokenRefreshService', () => {
           setTimeout(() => resolve(mockEntraJwt), 50);
         });
       });
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.returnValue(mockBusinessJwt);
 
       // Act: 3つのリクエストを同時に実行
@@ -468,7 +468,7 @@ describe('TokenRefreshService', () => {
           setTimeout(() => resolve(mockEntraJwt), 50);
         });
       });
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.returnValue(mockBusinessJwt);
 
       // Act: 5つのリクエストを同時に実行
@@ -537,7 +537,7 @@ describe('TokenRefreshService', () => {
           setTimeout(() => resolve('entra-jwt'), 50);
         });
       });
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(false));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: false, errorMessage: 'auth failed' }));
 
       // Act: 2つのリクエストを同時に実行
       const results: (string | null)[] = [];
@@ -609,7 +609,7 @@ describe('TokenRefreshService', () => {
           setTimeout(() => resolve('entra-jwt'), 50);
         });
       });
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.returnValue(null);
 
       // Act: 2つのリクエストを同時に実行
@@ -646,7 +646,7 @@ describe('TokenRefreshService', () => {
           setTimeout(() => resolve('entra-jwt'), 50);
         });
       });
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.throwError(new Error('トークンエラー'));
 
       // Act: 2つのリクエストを同時に実行
@@ -687,7 +687,7 @@ describe('TokenRefreshService', () => {
           setTimeout(() => resolve(mockEntraJwt), 100);
         });
       });
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.returnValue(mockBusinessJwt);
 
       // Act
@@ -727,7 +727,7 @@ describe('TokenRefreshService', () => {
       const mockBusinessJwt = 'business-jwt-456';
 
       msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve(mockEntraJwt));
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(true));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: true }));
       tokenServiceSpy.getToken.and.returnValue(mockBusinessJwt);
 
       // Act
@@ -755,7 +755,7 @@ describe('TokenRefreshService', () => {
     it('handleCallbackWithEntraJwt 失敗 → null を返す', async () => {
       // Arrange
       msalServiceSpy.acquireTokenSilent.and.returnValue(Promise.resolve('entra-jwt'));
-      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve(false));
+      authServiceSpy.handleCallbackWithEntraJwt.and.returnValue(Promise.resolve({ success: false, errorMessage: 'auth failed' }));
 
       // Act
       const result = await (service as any).executeTokenRefresh();

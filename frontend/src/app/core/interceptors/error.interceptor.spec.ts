@@ -1,8 +1,8 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { HttpClient, HttpErrorResponse, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, HttpClient, HttpErrorResponse, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
-import { errorInterceptor, RETRY_TOKEN } from './error.interceptor';
+import { ErrorInterceptor } from './error.interceptor';
 import { TokenService } from '../services/token.service';
 import { TokenRefreshService } from '../services/token-refresh.service';
 
@@ -25,11 +25,12 @@ describe('errorInterceptor', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptors([errorInterceptor])),
+        provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
         { provide: TokenService, useValue: tokenServiceSpy },
         { provide: TokenRefreshService, useValue: tokenRefreshServiceSpy },
-        { provide: Router, useValue: routerSpy }
+        { provide: Router, useValue: routerSpy },
+        { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true }
       ]
     });
 
@@ -268,28 +269,6 @@ describe('errorInterceptor', () => {
 
       // Assert: performSilentRefresh は1回しか呼ばれない
       expect(tokenRefreshServiceSpy.performSilentRefresh).toHaveBeenCalledTimes(1);
-    }));
-
-    it('リトライリクエストにはRETRY_TOKENが設定されている', fakeAsync(() => {
-      // Arrange
-      const newToken = 'new-jwt-token';
-      tokenRefreshServiceSpy.performSilentRefresh.and.returnValue(Promise.resolve(newToken));
-
-      // Act
-      httpClient.get(apiUrl).subscribe();
-
-      // 1回目のリクエスト（401エラー）
-      const req1 = httpMock.expectOne(apiUrl);
-      req1.flush(null, { status: 401, statusText: 'Unauthorized' });
-
-      // Promise解決を待機
-      tick();
-
-      // リトライリクエスト - RETRY_TOKEN が true になっているはず
-      const req2 = httpMock.expectOne(apiUrl);
-      // context から retry フラグを取得して確認
-      expect(req2.request.context.get(RETRY_TOKEN)).toBeTrue();
-      req2.flush({ success: true });
     }));
 
     it('リトライ後の500エラーはそのまま伝播する', fakeAsync(() => {

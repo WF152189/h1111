@@ -1,10 +1,10 @@
 import { ApplicationConfig, provideAppInitializer, inject } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptors, withInterceptorsFromDi } from '@angular/common/http';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
-import { errorInterceptor } from './core/interceptors/error.interceptor';
+import { ErrorInterceptor } from './core/interceptors/error.interceptor';
 import { AuthGuardT } from './core/guards/auth.guard';
 import { PermissionGuardT } from './core/guards/permission.guard';
 import { MsalService, IMsalService, MSAL_SERVICE, MSAL_INSTANCE_FACTORY, defaultMsalFactory } from './core/services/msal.service';
@@ -14,7 +14,12 @@ import { environment } from '../environments/environment';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes),
-    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+    provideHttpClient(
+      withInterceptors([authInterceptor]),
+      withInterceptorsFromDi()
+    ),
+    // エラー処理インターセプター（クラスベース）
+    { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true },
     // ガードクラスのDI登録
     AuthGuardT,
     PermissionGuardT,

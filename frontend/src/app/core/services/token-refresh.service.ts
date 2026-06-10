@@ -77,8 +77,8 @@ export class TokenRefreshService {
       // Step 2: handleCallbackWithEntraJwt() で業務JWT更新
       const result = await this.authService.handleCallbackWithEntraJwt(entraJwt);
 
-      if (!result) {
-        console.warn('[TokenRefreshService] 業務JWT更新失敗');
+      if (!result.success) {
+        console.warn('[TokenRefreshService] 業務JWT更新失敗:', result.errorMessage);
         return null;
       }
 

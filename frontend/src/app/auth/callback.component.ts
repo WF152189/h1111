@@ -75,24 +75,18 @@ export class CallbackComponent implements OnInit {
       // MSALパターン: パラメータはMSALが自動処理
       // handleCallback()内部でhandleRedirectPromise()が認可コードを検出
       console.log('[CallbackComponent] handleCallback() 呼び出し');
-      const success = await this.authService.handleCallback();
-      console.log('[CallbackComponent] handleCallback結果:', success);
+      const result = await this.authService.handleCallback();
+      console.log('[CallbackComponent] handleCallback結果:', result);
       
-      if (success) {
+      if (result.success) {
         // 認証成功 → 常にダッシュボードへ
         console.log('[CallbackComponent] ダッシュボードへ遷移');
         this.router.navigate(['/dashboard']);
       } else {
-        // エラー理由を取得して表示
-        this.errorReason = sessionStorage.getItem('auth_error_reason');
-        
-        if (this.errorReason) {
-          this.error = this.getErrorMessage(this.errorReason);
-          console.error('[CallbackComponent] エラー表示:', this.error);
-        } else {
-          this.error = '認証処理に失敗しました。もう一度お試しください。';
-          console.error('[CallbackComponent] 認証失敗（詳細なし）');
-        }
+        // エラーコードに基づいてメッセージを表示
+        this.errorReason = result.errorCode || sessionStorage.getItem('auth_error_reason');
+        this.error = this.getErrorMessage(result.errorCode, result.errorMessage);
+        console.error('[CallbackComponent] エラー表示:', this.error);
       }
     } catch (error) {
       console.error('[CallbackComponent] 予期せぬエラー:', error);
@@ -102,17 +96,23 @@ export class CallbackComponent implements OnInit {
 
   /**
    * エラーコードに応じてメッセージを返す
+   * @param errorCode - エラーコード
+   * @param fallbackMessage - フォールバックメッセージ
    */
-  private getErrorMessage(code: string): string {
-    switch (code) {
-      case 'ENTRA_JWT_INVALID':
+  private getErrorMessage(errorCode?: string, fallbackMessage?: string): string {
+    switch (errorCode) {
+      case 'ENTRA_TOKEN_INVALID':
         return 'Entra IDトークンの署名検証に失敗しました。再度ログインしてください。';
       case 'ENTRA_JWT_EXPIRED':
         return 'Entra IDトークンの有効期限が切れています。再度ログインしてください。';
       case 'USER_NOT_FOUND':
         return 'ユーザーが見つかりません。管理者に問い合わせてください。';
+      case 'INTERNAL_AUTH_FAILED':
+        return '業務JWTの検証に失敗しました。再度ログインしてください。';
+      case 'SERVER_ERROR':
+        return 'サーバーエラーが発生しました。しばらく待ってから再度お試しください。';
       default:
-        return '認証処理に失敗しました。もう一度お試しください。';
+        return fallbackMessage || '認証処理に失敗しました。もう一度お試しください。';
     }
   }
 
