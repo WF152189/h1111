@@ -1,8 +1,6 @@
 package com.auth.app.service;
 
 import com.auth.app.dto.AuthResponse;
-import com.auth.app.dto.UserPermissionInfo;
-import com.auth.app.exception.AuthException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,7 +18,6 @@ import org.springframework.stereotype.Service;
 public class AuthenticationService {
 
     private final JwtService jwtService;
-    private final UserService userService;
     private final EntraIdJwtValidator entraIdJwtValidator;
 
     /**
@@ -28,8 +25,7 @@ public class AuthenticationService {
      * 
      * フロー:
      * 1. EntraIdJwtValidatorでEntra JWT検証（署名・iss・aud・exp）
-     * 2. UserServiceでユーザー権限照会
-     * 3. JwtServiceで業務JWT生成
+     * 2. JwtServiceで業務JWT生成
      */
     public AuthResponse verifyAndIssueTokens(String entraJwt) {
         log.info("=== 認証フロー開始 ===");
@@ -39,32 +35,15 @@ public class AuthenticationService {
         String userId = claims.getSubject();
         log.info("Entra JWT検証成功: userId={}", userId);
 
-        // Step 2: ユーザー権限照会
-        UserPermissionInfo permInfo = userService.getUserPermissionInfo("uF6FqsMh5NBqDG2jhOJA0ui6KX0u8BlFa3TBhhlPJ14");
-        if (permInfo == null) {
-            log.warn("ユーザー未登録: userId={}", userId);
-            throw AuthException.userNotFound();
-        }
+        // Step 2: 業務JWT生成
+        String businessJwt = jwtService.generateToken(userId);
 
-        // Step 3: 業務JWT生成
-        String businessJwt = jwtService.generateToken(
-                permInfo.getUserId(),
-                permInfo.getEmail(),
-                permInfo.getDisplayName(),
-                permInfo.getRoles(),
-                permInfo.getPermissions()
-        );
-
-        log.info("業務JWT発行完了: userId={}, roles={}", userId, permInfo.getRoles());
+        log.info("業務JWT発行完了: userId={}", userId);
         log.info("=== 認証フロー完了 ===");
 
         return AuthResponse.builder()
                 .token(businessJwt)
-                .userId(permInfo.getUserId())
-                .email(permInfo.getEmail())
-                .displayName(permInfo.getDisplayName())
-                .roles(permInfo.getRoles())
-                .permissions(permInfo.getPermissions())
+                .userId(userId)
                 .build();
     }
 

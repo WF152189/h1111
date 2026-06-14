@@ -26,7 +26,7 @@ public class JwtService {
     }
 
     /**
-     * 業務JWTを生成する
+     * 業務JWTを生成する（フル情報）
      */
     public String generateToken(String userId, String email, String displayName,
                                  List<String> roles, List<String> permissions) {
@@ -42,6 +42,22 @@ public class JwtService {
                 .claim("display_name", displayName)
                 .claim("roles", roles)
                 .claim("permissions", permissions)
+                .signWith(signingKey)
+                .compact();
+    }
+
+    /**
+     * 業務JWTを生成する（userIdのみ）
+     */
+    public String generateToken(String userId) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + expirationSeconds * 1000);
+
+        return Jwts.builder()
+                .subject(userId)
+                .issuer(issuer)
+                .issuedAt(now)
+                .expiration(expiry)
                 .signWith(signingKey)
                 .compact();
     }

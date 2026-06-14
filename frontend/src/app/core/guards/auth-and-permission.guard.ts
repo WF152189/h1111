@@ -1,4 +1,4 @@
-import { CanActivateFn, CanActivateChildFn, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { CanActivateFn, CanActivateChildFn, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { inject } from '@angular/core';
 import { AuthGuardT } from './auth.guard';
 import { PermissionGuardT } from './permission.guard';
@@ -23,7 +23,7 @@ import { PermissionGuardT } from './permission.guard';
  * 
  * @param route - ルートのスナップショット
  * @param state - ルーターの現在の状態
- * @returns `true`（アクセス許可）または `false`（アクセス拒否）
+ * @returns `true`（アクセス許可）、`false`（アクセス拒否）、または `UrlTree`（リダイレクト先）
  */
 export const authAndPermissionGuard: CanActivateFn = (
   route: ActivatedRouteSnapshot,
@@ -34,13 +34,13 @@ export const authAndPermissionGuard: CanActivateFn = (
   const permGuard = inject(PermissionGuardT);
   
   // 非同期処理は Promise チェーンで実行
-  return authGuard.canActivate(route, state).then((authResult) => {
+  return authGuard.canActivate(route, state).then((authResult): boolean | UrlTree | Promise<boolean | UrlTree> => {
     // AuthGuard が true の場合のみ PermissionGuard を実行
     if (authResult === true) {
       return permGuard.canActivate(route, state);
     }
     
-    // AuthGuard が false の場合はそのまま返す
+    // AuthGuard が false または UrlTree の場合はそのまま返す
     return authResult;
   });
 };
@@ -61,7 +61,7 @@ export const authAndPermissionGuard: CanActivateFn = (
  * 
  * @param childRoute - 子ルートのスナップショット
  * @param state - ルーターの現在の状態
- * @returns `true`（アクセス許可）または `false`（アクセス拒否）
+ * @returns `true`（アクセス許可）、`false`（アクセス拒否）、または `UrlTree`（リダイレクト先）
  */
 export const authAndPermissionChildGuard: CanActivateChildFn = (
   childRoute: ActivatedRouteSnapshot,
@@ -72,13 +72,13 @@ export const authAndPermissionChildGuard: CanActivateChildFn = (
   const permGuard = inject(PermissionGuardT);
   
   // 非同期処理は Promise チェーンで実行
-  return authGuard.canActivate(childRoute, state).then((authResult) => {
+  return authGuard.canActivate(childRoute, state).then((authResult): boolean | UrlTree | Promise<boolean | UrlTree> => {
     // AuthGuard が true の場合のみ PermissionGuard を実行
     if (authResult === true) {
       return permGuard.canActivateChild(childRoute, state);
     }
     
-    // AuthGuard が false の場合はそのまま返す
+    // AuthGuard が false または UrlTree の場合はそのまま返す
     return authResult;
   });
 };

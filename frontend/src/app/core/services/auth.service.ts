@@ -350,7 +350,7 @@ export class AuthService {
     } catch (error) {
       if (!(error instanceof HttpErrorResponse)) {
         console.error('[callValidateApi] 想定外エラー:', error);
-        return 'retry';
+        return 'fail';
     }
       
       // 401: 認証エラー（期限切れ、改竄、トークンなしなど）

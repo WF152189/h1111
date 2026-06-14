@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { CanActivate, CanActivateChild, CanActivateFn, CanActivateChildFn, Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { CanActivate, CanActivateChild, CanActivateFn, CanActivateChildFn, Router, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { TokenService } from '../services/token.service';
 import { TokenRefreshService } from '../services/token-refresh.service';
 import { AuthService } from '../services/auth.service';
@@ -70,7 +70,7 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
    * 
    * @param route - アクティブ化されたルートのスナップショット
    * @param state - ルーターの現在の状態
-   * @returns `true`（アクセス許可）または `false`（認証失敗、既にリダイレクト済み）
+   * @returns `true`（アクセス許可）、`false`（認証失敗）、または `UrlTree`（リダイレクト先）
    * 
    * @remarks
    * MSALのloginRedirect()は内部でwindow.location.hrefを実行するため、
@@ -79,7 +79,7 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
   async canActivate(
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
-  ): Promise<boolean> {
+  ): Promise<boolean | UrlTree> {
     console.log('[AuthGuard] canActivate 開始 - 時刻:', Date.now());
     const result = await this.checkAuth(state);
     console.log('[AuthGuard] canActivate 完了 - 時刻:', Date.now(), '結果:', result);
@@ -91,7 +91,7 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
    * 
    * @param childRoute - 子ルートのスナップショット
    * @param state - ルーターの現在の状態
-   * @returns `true`（アクセス許可）または `false`（認証失敗、既にリダイレクト済み）
+   * @returns `true`（アクセス許可）、`false`（認証失敗）、または `UrlTree`（リダイレクト先）
    * 
    * @remarks
    * canActivate と同一の認証ロジックを使用。
@@ -101,7 +101,7 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
   async canActivateChild(
     childRoute: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
-  ): Promise<boolean> {
+  ): Promise<boolean | UrlTree> {
     return this.checkAuth(state);
   }
 
@@ -109,13 +109,13 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
    * 共通認証チェックロジック
    * 
    * JWTが無効な場合:
-   * - プログラム遷移（メニュークリック等） → /login ページへリダイレクト
+   * - プログラム遷移（メニュークリック等） → /login ページへリダイレクト（UrlTree返却）
    * - 直接アクセス（URL直接入力等） → Entra ID認証を直接実行
    * 
    * @param state - ルーターの現在の状態
-   * @returns `true`（アクセス許可）または `false`（認証失敗、既にリダイレクト済み）
+   * @returns `true`（アクセス許可）、`false`（認証失敗）、または `UrlTree`（リダイレクト先）
    */
-  private async checkAuth(state: RouterStateSnapshot): Promise<boolean> {
+  private async checkAuth(state: RouterStateSnapshot): Promise<boolean | UrlTree> {
     // JWT有効ならアクセス許可
     console.log('[AuthGuard] checkAuth 開始 - url:', state.url);
     
@@ -150,7 +150,7 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
     if (isRouterNavigate) {
       // プログラム遷移 → /login ページへリダイレクト
       console.warn('[AuthGuard] プログラム遷移、ログインページへリダイレクト');
-      this.router.navigate(['/login'], {
+      return this.router.createUrlTree(['/login'], {
         queryParams: { 
           reason: 'session_expired',
           message: 'セッションの有効期限が切れました。再度ログインしてください。'

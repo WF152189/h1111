@@ -1,5 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { Router, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { AuthGuardT } from './auth.guard';
 import { TokenService } from '../services/token.service';
 import { TokenRefreshService } from '../services/token-refresh.service';
@@ -18,8 +18,11 @@ describe('AuthGuardT', () => {
   beforeEach(() => {
     const tokenSpy = jasmine.createSpyObj('TokenService', ['isTokenValid']);
     const tokenRefreshSpy = jasmine.createSpyObj('TokenRefreshService', ['performSilentRefresh']);
-    const routerSpyObj = jasmine.createSpyObj('Router', ['navigate']);
+    const routerSpyObj = jasmine.createSpyObj('Router', ['navigate', 'createUrlTree']);
     const authSpy = jasmine.createSpyObj('AuthService', ['login']);
+
+    // createUrlTree のモック戻り値
+    routerSpyObj.createUrlTree.and.returnValue({} as UrlTree);
 
     TestBed.configureTestingModule({
       providers: [
@@ -82,8 +85,8 @@ describe('AuthGuardT', () => {
       const result = await guard.canActivate(mockRoute, mockState);
 
       // Assert
-      expect(result).toBe(false);
-      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], {
+      expect(result).toEqual({} as UrlTree);
+      expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login'], {
         queryParams: {
           reason: 'session_expired',
           message: 'セッションの有効期限が切れました。再度ログインしてください。'
@@ -101,8 +104,8 @@ describe('AuthGuardT', () => {
       const result = await guard.canActivate(mockRoute, mockState);
 
       // Assert
-      expect(result).toBe(false);
-      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], jasmine.any(Object));
+      expect(result).toEqual({} as UrlTree);
+      expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login'], jasmine.any(Object));
     });
 
     it('JWT無効 → サイレント更新失敗 → 直接アクセス → Entra ID認証を実行', async () => {
@@ -118,7 +121,7 @@ describe('AuthGuardT', () => {
       expect(result).toBe(false);
       expect(sessionStorage.getItem('redirect_url')).toBe('/dashboard');
       expect(authServiceSpy.login).toHaveBeenCalled();
-      expect(routerSpy.navigate).not.toHaveBeenCalled();
+      expect(routerSpy.createUrlTree).not.toHaveBeenCalled();
     });
 
     it('canActivate実行後、isProgrammaticNavigation がリセットされる', async () => {
@@ -171,8 +174,8 @@ describe('AuthGuardT', () => {
       const result = await guard.canActivateChild(mockChildRoute, mockState);
 
       // Assert
-      expect(result).toBe(false);
-      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], jasmine.any(Object));
+      expect(result).toEqual({} as UrlTree);
+      expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login'], jasmine.any(Object));
     });
   });
 });
