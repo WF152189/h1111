@@ -62,13 +62,7 @@ public class AuthController {
             response.addHeader("Authorization", "Bearer " + dummyToken);
             
             // スタブ用レスポンス
-            return ResponseEntity.ok(AuthResponse.success(
-                    "stub-user-12345",
-                    "testuser@example.com",
-                    "テストユーザー",
-                    java.util.List.of("USER"),
-                    java.util.List.of("read", "write")
-            ));
+            return ResponseEntity.ok(AuthResponse.success());
         }
 
         // 本番モード: 例外処理は GlobalExceptionHandler に委譲
@@ -78,16 +72,10 @@ public class AuthController {
         // アクセストークンをレスポンスヘッダーに設定
         response.addHeader("Authorization", "Bearer " + authResponse.getToken());
 
-        log.info("認証・JWT発行完了: userId={}", authResponse.getUserId());
+        log.info("認証・JWT発行完了");
         
         // 成功レスポンスを返す
-        return ResponseEntity.ok(AuthResponse.success(
-                authResponse.getUserId(),
-                authResponse.getEmail(),
-                authResponse.getDisplayName(),
-                authResponse.getRoles(),
-                authResponse.getPermissions()
-        ));
+        return ResponseEntity.ok(AuthResponse.success());
     }
 
     /**

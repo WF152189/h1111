@@ -57,7 +57,6 @@ class AuthControllerTest {
                 // Arrange
                 AuthResponse authResponse = AuthResponse.builder()
                         .token(TEST_BUSINESS_JWT)
-                        .userId("user-123")
                         .build();
 
                 when(authenticationService.verifyAndIssueTokens(TEST_ENTRA_JWT))
@@ -68,7 +67,7 @@ class AuthControllerTest {
                                 .header("Authorization", "Bearer " + TEST_ENTRA_JWT))
                         .andExpect(status().isOk())
                         .andExpect(header().string("Authorization", "Bearer " + TEST_BUSINESS_JWT))
-                        .andExpect(jsonPath("$.userId").value("user-123"));
+                        .andExpect(jsonPath("$.success").value(true));
                 // 注意: token は @JsonIgnore でJSONに含まれない
 
                 verify(authenticationService).verifyAndIssueTokens(TEST_ENTRA_JWT);

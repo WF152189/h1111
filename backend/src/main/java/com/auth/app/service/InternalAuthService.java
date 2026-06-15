@@ -2,6 +2,9 @@ package com.auth.app.service;
 
 import com.auth.app.client.HttpClient;
 import com.auth.app.exception.InternalAuthException;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -29,12 +32,46 @@ public class InternalAuthService {
     private String authorizationApiUrl;
 
     private final HttpClient httpClient;
+    private final JwtService jwtService;
 
     /**
      * コンストラクタ
      */
-    public InternalAuthService(HttpClient httpClient) {
+    public InternalAuthService(HttpClient httpClient, JwtService jwtService) {
         this.httpClient = httpClient;
+        this.jwtService = jwtService;
+    }
+
+    /**
+     * JWT検証 + userId取得
+     * 
+     * Authorization headerからJWTを取得し、検証後にsubクレームからuserIdを返す。
+     * 
+     * @param authHeader Authorization header（"Bearer <token>"）
+     * @return userId（JWTのsubクレーム）
+     * @throws InternalAuthException JWT検証失敗時
+     */
+    public String validateTokenAndGetUserId(String authHeader) {
+        // Authorization headerのチェック
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw InternalAuthException.tokenNotFound();
+        }
+        
+        String token = authHeader.substring(7);
+        
+        // JWTの検証 + userId取得
+        try {
+            Claims claims = jwtService.validateToken(token);
+            String userId = claims.getSubject();
+            log.debug("JWT検証成功: userId={}", userId);
+            return userId;
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT期限切れ: {}", e.getMessage());
+            throw InternalAuthException.tokenExpired();
+        } catch (JwtException e) {
+            log.warn("JWT検証失敗: {}", e.getMessage());
+            throw InternalAuthException.tokenValidationFailed(e.getMessage());
+        }
     }
 
     /**
@@ -42,13 +79,12 @@ public class InternalAuthService {
      * 
      * フロー:
      * 1. HttpClient で外部認可システムAPIを呼び出し
-     * 2. 認可結果を取得
-     * 3. 認可失敗の場合は例外をスロー
+     * 2. 認可結果を取得して返す
      * 
      * @param userId ユーザー識別子（Entra ID sub/oid）
-     * @throws InternalAuthException 認可失敗時
+     * @return AuthorizationResult 認可結果（部署・資格コード含む）
      */
-    public void checkAuthorization(String userId) {
+    public AuthorizationResult checkAuthorization(String userId) {
         log.debug("外部認可システム呼び出し開始: userId={}, url={}", userId, authorizationApiUrl);
 
         try {
@@ -60,31 +96,42 @@ public class InternalAuthService {
 
             log.debug("外部認可システム応答受信: userId={}, response={}", userId, response);
 
-            // 認可結果をチェック
+            // 認可結果を取得
             Boolean authorized = (Boolean) response.get("authorized");
+            String department = (String) response.get("department");
+            String qualificationCode = (String) response.get("qualificationCode");
             String message = (String) response.get("message");
 
-            if (authorized == null || !authorized) {
-                log.warn("認可失敗: userId={}, message={}", userId, message);
-                throw InternalAuthException.authorizationFailed(
-                    message != null ? message : "認可に失敗しました"
-                );
-            }
-
-            log.info("認可成功: userId={}", userId);
+            log.info("外部認可システム応答: userId={}, authorized={}, department={}, qualificationCode={}", 
+                userId, authorized, department, qualificationCode);
+            
+            return new AuthorizationResult(
+                authorized != null && authorized,
+                department,
+                qualificationCode,
+                message
+            );
 
         } catch (HttpClient.HttpClientException e) {
             // HttpClient 例外
             log.error("外部認可システム呼び出しエラー: userId={}, error={}", userId, e.getMessage());
-            throw InternalAuthException.authorizationFailed(
-                "外部認可システムとの通信に失敗しました: " + e.getMessage()
-            );
+            return new AuthorizationResult(false, null, null, "外部認可システムとの通信に失敗しました: " + e.getMessage());
         } catch (Exception e) {
             // その他の例外
             log.error("予期せぬエラー: userId={}, error={}", userId, e.getMessage(), e);
-            throw InternalAuthException.authorizationFailed(
-                "認可チェック中にエラーが発生しました: " + e.getMessage()
-            );
+            return new AuthorizationResult(false, null, null, "認可チェック中にエラーが発生しました: " + e.getMessage());
         }
+    }
+
+    /**
+     * 認可結果DTO
+     */
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    public static class AuthorizationResult {
+        private boolean authorized;
+        private String department;
+        private String qualificationCode;
+        private String message;
     }
 }

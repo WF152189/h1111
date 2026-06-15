@@ -63,6 +63,24 @@ public class JwtService {
     }
 
     /**
+     * 業務JWTを生成する（部署・資格コード含む）
+     */
+    public String generateTokenWithClaims(String userId, String department, String qualificationCode) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + expirationSeconds * 1000);
+
+        return Jwts.builder()
+                .subject(userId)
+                .issuer(issuer)
+                .issuedAt(now)
+                .expiration(expiry)
+                .claim("department", department)
+                .claim("qualification_code", qualificationCode)
+                .signWith(signingKey)
+                .compact();
+    }
+
+    /**
      * 業務JWTを検証し、クレームを返す
      */
     public Claims validateToken(String token) {

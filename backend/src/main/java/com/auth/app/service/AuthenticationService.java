@@ -43,7 +43,6 @@ public class AuthenticationService {
 
         return AuthResponse.builder()
                 .token(businessJwt)
-                .userId(userId)
                 .build();
     }
 

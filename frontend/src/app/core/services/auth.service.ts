@@ -190,9 +190,9 @@ export class AuthService {
       return this.retryAuthFlow(() => this.runAuthFlow(entraJwt));
     }
 
-    // Step 2: /auth/validate 呼び出し（userIdを渡す）
+    // Step 2: /auth/validate 呼び出し
     console.log('[runAuthFlow] /auth/validate呼び出し開始');
-    const validateResult = await this.callValidateApi(verifyResult.userId!);
+    const validateResult = await this.callValidateApi();
     
     if (validateResult === 'success') {
       console.log('[runAuthFlow] 全認証フロー完了: 成功');
@@ -252,7 +252,7 @@ export class AuthService {
   /**
    * /auth/verify API呼び出し
    */
-  private async callVerifyApi(entraJwt: string): Promise<{success: boolean; message?: string; httpStatus: number;userId?: string;}> {
+  private async callVerifyApi(entraJwt: string): Promise<{success: boolean; message?: string; httpStatus: number;}> {
     try {
       // Authorization headerからトークンを取得するために observe: 'response' を使用
       const response = await firstValueFrom(
@@ -264,30 +264,28 @@ export class AuthService {
       );
 
       // 200 が来たら成功（例外が来ない = 成功）
-      // userId が存在するかで判定
-      if (response.body?.userId) {
-        // 業務JWTをheaderから抽出して保存
-        const authHeader = response.headers.get('Authorization');
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          const token = authHeader.substring(7);
-          this.tokenService.saveToken(token);
-          console.log('[callVerifyApi] 業務JWT保存完了');
-        } else {
-          console.warn('[callVerifyApi] Authorization headerなし');
-          return { success: false, message: 'Tokenなし', httpStatus: response.status };
-        }
-        
-        console.log('[callVerifyApi] /auth/verify成功');
-        return { 
-          success: true,
-          userId: response.body.userId,
-          httpStatus: response.status
-        };
-      } else {
-        // 通常は発生しない（userId なしの200）
-        console.warn('[callVerifyApi] 予期せぬレスポンス');
-        return { success: false, message: 'userId なし', httpStatus: response.status };
+      // success フィールドで判定
+      if (!response.body?.success) {
+        console.warn('[callVerifyApi] success=false');
+        return { success: false, message: 'success=false', httpStatus: response.status };
       }
+      
+      // 業務JWTをheaderから抽出して保存
+      const authHeader = response.headers.get('Authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        this.tokenService.saveToken(token);
+        console.log('[callVerifyApi] 業務JWT保存完了');
+      } else {
+        console.warn('[callVerifyApi] Authorization headerなし');
+        return { success: false, message: 'Tokenなし', httpStatus: response.status };
+      }
+      
+      console.log('[callVerifyApi] /auth/verify成功');
+      return { 
+        success: true,
+        httpStatus: response.status
+      };
 
     } catch (error) {
       if (!(error instanceof HttpErrorResponse)) {
@@ -315,9 +313,8 @@ export class AuthService {
 
   /**
    * /auth/validate API呼び出し
-   * @param userId - ユーザーID（Entra sub）
    */
-  private async callValidateApi(userId: string): Promise<'success' | 'fail' | 'retry'> {
+  private async callValidateApi(): Promise<'success' | 'fail' | 'retry'> {
     try {
       // 業務JWTをAuthorization headerに追加
       const token = this.tokenService.getToken();
@@ -330,7 +327,7 @@ export class AuthService {
       }
       
       const response = await firstValueFrom(
-        this.http.post<any>(`${environment.apiBaseUrl}/auth/validate`, { userId }, {
+        this.http.post<any>(`${environment.apiBaseUrl}/auth/validate`, {}, {
           headers,
           withCredentials: true,
           observe: 'response'  // レスポンス全体を取得
@@ -343,6 +340,14 @@ export class AuthService {
         return 'fail';
       }
       
+      // 成功時: レスポンスヘッダーから新JWTを取得して保存し直す
+      const authHeader = response.headers.get('Authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const newToken = authHeader.substring(7);
+        this.tokenService.saveToken(newToken);
+        console.log('[callValidateApi] 新JWT保存完了（部署・資格コード含む）');
+      }
+      
       // 200 が来たら成功（例外が来ない = 成功）
       console.log('[callValidateApi] sub検証成功');
       return 'success';
@@ -351,7 +356,7 @@ export class AuthService {
       if (!(error instanceof HttpErrorResponse)) {
         console.error('[callValidateApi] 想定外エラー:', error);
         return 'fail';
-    }
+      }
       
       // 401: 認証エラー（期限切れ、改竄、トークンなしなど）
       // runAuthFlow で再実行すれば、callVerifyApi → callValidateApi の順で新JWTが取得される

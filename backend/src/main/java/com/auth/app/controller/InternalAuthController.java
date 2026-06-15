@@ -3,9 +3,6 @@ package com.auth.app.controller;
 import com.auth.app.exception.InternalAuthException;
 import com.auth.app.service.InternalAuthService;
 import com.auth.app.service.JwtService;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * 内部認証コントローラー
@@ -25,8 +23,8 @@ import jakarta.servlet.http.HttpServletRequest;
 @Slf4j
 public class InternalAuthController {
 
-    private final JwtService jwtService;
     private final InternalAuthService internalAuthService;
+    private final JwtService jwtService;
     
     @Value("${stub.enabled}")
     private boolean stubEnabled;
@@ -36,24 +34,24 @@ public class InternalAuthController {
      * Entra ID subクレーム検証API
      * 
      * フロー:
-     * 1. Authorization headerから業務JWTを取得
-     * 2. JWTの検証（形式、署名、有効期限）
-     * 3. リクエストボディからuserIdを取得（Entra ID token内のsub/oid）
-     * 4. userIdのフォーマット・有効性を検証
-     * 5. 業務システムへの認可是否存在をチェック（1秒待機）
+     * 1. InternalAuthService でJWT検証 + userId取得
+     * 2. userIdのフォーマット・有効性を検証
+     * 3. 業務システムへの認可是否存在をチェック
+     * 4. 認可失敗時は success=false を返す
+     * 5. 部署・資格コードを含むJWTを再生成
      * 6. 検証結果を返す
      * 
-     * @param request { "userId": "ユーザー識別子" }
+     * @param request 空のJSONオブジェクト（{}）
      * @return 検証結果
      */
     @PostMapping("/validate")
     public ResponseEntity<ValidationResponse> validate(
-            @RequestBody ValidationRequest request,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         
         // スタブモード: 検証成功としてレスポンスを返す
         if (stubEnabled) {
-            log.info("[スタブ] sub検証成功としてレスポンスを返します: userId={}", request.getUserId());
+            log.info("[スタブ] sub検証成功としてレスポンスを返します");
             
             return ResponseEntity.ok(
                 ValidationResponse.builder()
@@ -64,45 +62,43 @@ public class InternalAuthController {
         }
         
         // 本番モード: 通常の検証処理
-        // Step 1: Authorization headerからJWTを取得
+        // Step 1: JWT検証 + userId取得（サービス層で処理）
         String authHeader = httpRequest.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw InternalAuthException.tokenNotFound();
-        }
+        String userId = internalAuthService.validateTokenAndGetUserId(authHeader);
         
-        String token = authHeader.substring(7);
-        
-        // Step 2: JWTの検証
-        try {
-            Claims claims = jwtService.validateToken(token);
-            String tokenUserId = claims.getSubject();
-            log.debug("JWT検証成功: userId={}", tokenUserId);
-        } catch (ExpiredJwtException e) {
-            log.warn("JWT期限切れ: {}", e.getMessage());
-            throw InternalAuthException.tokenExpired();
-        } catch (JwtException e) {
-            log.warn("JWT検証失敗: {}", e.getMessage());
-            throw InternalAuthException.tokenValidationFailed(e.getMessage());
-        }
-        
-        // Step 3: userIdの必須チェック
-        String userId = request.getUserId();
-        if (userId == null || userId.isBlank()) {
-            log.warn("userIdが空です");
-            throw InternalAuthException.tokenValidationFailed("userIdは必須です");
-        }
-        
-        // Step 4: userIdのフォーマット検証（GUID形式であることを確認）
+        // Step 2: userIdのフォーマット検証（GUID形式であることを確認）
         if (!isValidSubFormat(userId)) {
             log.warn("userIdフォーマットが無効: userId={}", userId);
             throw InternalAuthException.tokenValidationFailed("userIdのフォーマットが無効です");
         }
         
-        // Step 5: 外部認可システムで認可チェック
-        internalAuthService.checkAuthorization(userId);
+        // Step 3: 外部認可システムで認可チェック
+        InternalAuthService.AuthorizationResult authResult = internalAuthService.checkAuthorization(userId);
+        
+        // Step 4: 認可結果チェック
+        if (!authResult.isAuthorized()) {
+            log.warn("認可失敗: userId={}, message={}", userId, authResult.getMessage());
+            return ResponseEntity.ok(
+                ValidationResponse.builder()
+                    .success(false)
+                    .message(authResult.getMessage() != null ? authResult.getMessage() : "権限がありません")
+                    .build()
+            );
+        }
+        
+        // Step 5: JWT再生成（部署・資格コードを含む）
+        String newToken = jwtService.generateTokenWithClaims(
+            userId,
+            authResult.getDepartment(),
+            authResult.getQualificationCode()
+        );
+        
+        // Authorizationヘッダーに新JWTを設定
+        httpResponse.addHeader("Authorization", "Bearer " + newToken);
         
         // Step 6: 検証成功を返す
-        log.info("sub検証成功: userId={}", userId);
+        log.info("sub検証成功: userId={}, department={}, qualificationCode={}", 
+            userId, authResult.getDepartment(), authResult.getQualificationCode());
         return ResponseEntity.ok(
             ValidationResponse.builder()
                 .success(true)
@@ -125,14 +121,6 @@ public class InternalAuthController {
             return true;
         }
         return false;
-    }
-
-    /**
-     * 検証リクエストDTO
-     */
-    @lombok.Data
-    public static class ValidationRequest {
-        private String userId;
     }
 
     /**
