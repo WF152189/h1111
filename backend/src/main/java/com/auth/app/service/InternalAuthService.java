@@ -87,40 +87,29 @@ public class InternalAuthService {
     public AuthorizationResult checkAuthorization(String userId) {
         log.debug("外部認可システム呼び出し開始: userId={}, url={}", userId, authorizationApiUrl);
 
-        try {
-            // HttpClient で外部API呼び出し
-            Map<String, Object> response = httpClient.post(
-                authorizationApiUrl,
-                Map.of("userId", userId)
-            );
+        // HttpClient で外部API呼び出し
+        Map<String, Object> response = httpClient.post(
+            authorizationApiUrl,
+            Map.of("userId", userId)
+        );
 
-            log.debug("外部認可システム応答受信: userId={}, response={}", userId, response);
+        log.debug("外部認可システム応答受信: userId={}, response={}", userId, response);
 
-            // 認可結果を取得
-            Boolean authorized = (Boolean) response.get("authorized");
-            String department = (String) response.get("department");
-            String qualificationCode = (String) response.get("qualificationCode");
-            String message = (String) response.get("message");
+        // 認可結果を取得
+        Boolean authorized = (Boolean) response.get("authorized");
+        String department = (String) response.get("department");
+        String qualificationCode = (String) response.get("qualificationCode");
+        String message = (String) response.get("message");
 
-            log.info("外部認可システム応答: userId={}, authorized={}, department={}, qualificationCode={}", 
-                userId, authorized, department, qualificationCode);
-            
-            return new AuthorizationResult(
-                authorized != null && authorized,
-                department,
-                qualificationCode,
-                message
-            );
-
-        } catch (HttpClient.HttpClientException e) {
-            // HttpClient 例外
-            log.error("外部認可システム呼び出しエラー: userId={}, error={}", userId, e.getMessage());
-            return new AuthorizationResult(false, null, null, "外部認可システムとの通信に失敗しました: " + e.getMessage());
-        } catch (Exception e) {
-            // その他の例外
-            log.error("予期せぬエラー: userId={}, error={}", userId, e.getMessage(), e);
-            return new AuthorizationResult(false, null, null, "認可チェック中にエラーが発生しました: " + e.getMessage());
-        }
+        log.info("外部認可システム応答: userId={}, authorized={}, department={}, qualificationCode={}", 
+            userId, authorized, department, qualificationCode);
+        
+        return new AuthorizationResult(
+            authorized != null && authorized,
+            department,
+            qualificationCode,
+            message
+        );
     }
 
     /**

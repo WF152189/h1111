@@ -52,6 +52,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(403).body(error);
     }
 
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
+        String requestId = UUID.randomUUID().toString();
+        log.error("外部サービス連携エラー [{}]: {}", requestId, ex.getMessage(), ex);
+
+        ErrorResponse error = ErrorResponse.of(
+                "SERVICE_UNAVAILABLE",
+                "外部サービスとの通信に失敗しました",
+                requestId
+        );
+        return ResponseEntity.status(503).body(error);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
         String requestId = UUID.randomUUID().toString();

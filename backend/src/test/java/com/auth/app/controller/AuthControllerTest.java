@@ -109,7 +109,7 @@ class AuthControllerTest {
             }
 
             @Test
-            @DisplayName("認証サービス例外 → 500")
+            @DisplayName("認証サービス例外 → 503")
             void verify_serviceException() throws Exception {
                 // Arrange
                 when(authenticationService.verifyAndIssueTokens(TEST_ENTRA_JWT))
@@ -118,7 +118,7 @@ class AuthControllerTest {
                 // Act & Assert
                 mockMvc.perform(post("/auth/verify")
                                 .header("Authorization", "Bearer " + TEST_ENTRA_JWT))
-                        .andExpect(status().isInternalServerError());
+                        .andExpect(status().isServiceUnavailable());
             }
         }
     }

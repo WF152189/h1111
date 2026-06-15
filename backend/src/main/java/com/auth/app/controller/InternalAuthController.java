@@ -73,7 +73,14 @@ public class InternalAuthController {
         }
         
         // Step 3: 外部認可システムで認可チェック
-        InternalAuthService.AuthorizationResult authResult = internalAuthService.checkAuthorization(userId);
+        InternalAuthService.AuthorizationResult authResult;
+        try {
+            authResult = internalAuthService.checkAuthorization(userId);
+        } catch (Exception e) {
+            // 外部認可システムとの通信失敗 → 503 Service Unavailable
+            log.error("外部認可システム呼び出しエラー: userId={}, error={}", userId, e.getMessage());
+            throw new RuntimeException("外部認可システムとの通信に失敗しました", e);
+        }
         
         // Step 4: 認可結果チェック
         if (!authResult.isAuthorized()) {
