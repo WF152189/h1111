@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { AuthService } from '../core/services/auth.service';
 import { TokenService } from '../core/services/token.service';
 import { TokenRefreshService } from '../core/services/token-refresh.service';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-login',
@@ -78,8 +78,7 @@ export class LoginComponent implements OnInit {
     private authService: AuthService,
     private tokenService: TokenService,
     private tokenRefreshService: TokenRefreshService,
-    private router: Router,
-    private route: ActivatedRoute
+    private router: Router
   ) {}
 
   ngOnInit() {
@@ -96,12 +95,13 @@ export class LoginComponent implements OnInit {
     // JWT期限切れの場合、サイレント更新を試みる
     this.trySilentRefresh();
 
-    // クエリパラメータからセッション期限切れメッセージを取得
-    this.route.queryParams.subscribe(params => {
-      if (params['reason'] === 'session_expired') {
-        this.sessionExpiredMessage = params['message'] || 'セッションの有効期限が切れました。再度ログインしてください。';
-      }
-    });
+    // history.stateからエラーメッセージを取得
+    const state = history.state;
+    if (state?.errorMessage) {
+      this.sessionExpiredMessage = state.errorMessage;
+      // 使い終わったらクリア
+      history.replaceState({}, '');
+    }
   }
 
   /**

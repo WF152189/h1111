@@ -150,12 +150,12 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
     if (isRouterNavigate) {
       // プログラム遷移 → /login ページへリダイレクト
       console.warn('[AuthGuard] プログラム遷移、ログインページへリダイレクト');
-      return this.router.createUrlTree(['/login'], {
-        queryParams: { 
-          reason: 'session_expired',
-          message: 'セッションの有効期限が切れました。再度ログインしてください。'
+      this.router.navigate(['/login'], {
+        state: { 
+          errorMessage: 'セッションの有効期限が切れました。再度ログインしてください。'
         }
       });
+      return false;  // navigate()で遷移済みなのでfalseを返す
     } else {
       // 直接アクセス → Entra ID認証を直接実行
       console.warn('[AuthGuard] 直接アクセス、Entra ID認証を直接実行');

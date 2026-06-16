@@ -356,7 +356,7 @@ export class AuthService {
       if (!(error instanceof HttpErrorResponse)) {
         console.error('[callValidateApi] 想定外エラー:', error);
         return 'fail';
-      }
+    }
       
       // 401: 認証エラー（期限切れ、改竄、トークンなしなど）
       // runAuthFlow で再実行すれば、callVerifyApi → callValidateApi の順で新JWTが取得される

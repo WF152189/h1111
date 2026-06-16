@@ -46,6 +46,7 @@ describe('AuthGuardT', () => {
 
   afterEach(() => {
     sessionStorage.clear();
+    history.replaceState({}, '');  // history.stateをクリア
   });
 
   describe('canActivate', () => {
@@ -85,13 +86,9 @@ describe('AuthGuardT', () => {
       const result = await guard.canActivate(mockRoute, mockState);
 
       // Assert
-      expect(result).toEqual({} as UrlTree);
-      expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login'], {
-        queryParams: {
-          reason: 'session_expired',
-          message: 'セッションの有効期限が切れました。再度ログインしてください。'
-        }
-      });
+      expect(result).toBe(false);
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
+      expect(history.state.errorMessage).toBe('セッションの有効期限が切れました。再度ログインしてください。');
     });
 
     it('JWT無効 → サイレント更新失敗（例外）→ プログラム遷移 → /login へリダイレクト', async () => {
@@ -104,8 +101,9 @@ describe('AuthGuardT', () => {
       const result = await guard.canActivate(mockRoute, mockState);
 
       // Assert
-      expect(result).toEqual({} as UrlTree);
-      expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login'], jasmine.any(Object));
+      expect(result).toBe(false);
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
+      expect(history.state.errorMessage).toBe('セッションの有効期限が切れました。再度ログインしてください。');
     });
 
     it('JWT無効 → サイレント更新失敗 → 直接アクセス → Entra ID認証を実行', async () => {
@@ -174,8 +172,9 @@ describe('AuthGuardT', () => {
       const result = await guard.canActivateChild(mockChildRoute, mockState);
 
       // Assert
-      expect(result).toEqual({} as UrlTree);
-      expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login'], jasmine.any(Object));
+      expect(result).toBe(false);
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
+      expect(history.state.errorMessage).toBe('セッションの有効期限が切れました。再度ログインしてください。');
     });
   });
 });

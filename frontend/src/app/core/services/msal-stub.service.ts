@@ -77,7 +77,7 @@ export class MsalStubService implements IMsalService {
     // ログイン失敗シナリオ
     if (this.stubData.loginShouldFail) {
       console.error('[MsalStubService] ログイン失敗（スタブ設定）');
-      sessionStorage.setItem('auth_error_reason', 'LOGIN_FAILED');
+      localStorage.setItem('auth_error_reason', 'LOGIN_FAILED');
       return;
     }
 
@@ -86,8 +86,8 @@ export class MsalStubService implements IMsalService {
     const redirectUri = encodeURIComponent(environment.redirectUri);
     const state = 'stub-state-' + Date.now();
     
-    // stateをsessionStorageに保存（コールバック時に検証用）
-    sessionStorage.setItem('stub_state', state);
+    // stateをlocalStorageに保存（コールバック時に検証用）
+    localStorage.setItem('stub_state', state);
     
     const stubAuthUrl = `${apiBaseUrl}/stub/entra/authorize` +
       `?client_id=${environment.clientId}` +
@@ -121,7 +121,7 @@ export class MsalStubService implements IMsalService {
     }
 
     // state検証（オプション）
-    const savedState = sessionStorage.getItem('stub_state');
+    const savedState = localStorage.getItem('stub_state');
     if (savedState && state !== savedState) {
       console.warn('[MsalStubService] state不一致');
       return null;
@@ -252,7 +252,7 @@ export class MsalStubService implements IMsalService {
     
     // 保存されたデータをクリア
     localStorage.removeItem('stub_current_token');
-    sessionStorage.removeItem('stub_state');
+    localStorage.removeItem('stub_state');
     
     console.log('[MsalStubService] ログアウト完了（スタブ）');
   }
