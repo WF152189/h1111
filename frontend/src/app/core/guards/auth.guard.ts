@@ -122,6 +122,9 @@ export class AuthGuardT implements CanActivate, CanActivateChild {
     const isValid = this.tokenService.isTokenValid();
     console.log('[AuthGuard] checkAuth:', state.url, 'tokenValid:', isValid);
     if (isValid) {
+      if (state.url === '/login') {
+        return this.router.createUrlTree(['/dashboard']);
+      }
       return true;
     }
 

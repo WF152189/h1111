@@ -58,7 +58,7 @@ describe('AuthService', () => {
   });
 
   describe('callVerifyApi', () => {
-    it('成功時は業務JWTを保存し、userIdを返す', async () => {
+    it('成功時は業務JWTを保存し、successを返す', async () => {
       const entraJwt = 'fake-entra-jwt';
       const businessJwt = 'fake-business-jwt';
 
@@ -69,7 +69,7 @@ describe('AuthService', () => {
       expect(req.request.headers.get('Authorization')).toBe(`Bearer ${entraJwt}`);
       expect(req.request.withCredentials).toBeTrue();
 
-      req.flush({ userId: 'user123' }, {
+      req.flush({ success: true }, {
         status: 200,
         statusText: 'OK',
         headers: { Authorization: `Bearer ${businessJwt}` }
@@ -78,7 +78,6 @@ describe('AuthService', () => {
       const result = await promise;
 
       expect(result.success).toBeTrue();
-      expect(result.userId).toBe('user123');
       expect(tokenService.saveToken).toHaveBeenCalledWith(businessJwt);
     });
 
@@ -86,7 +85,7 @@ describe('AuthService', () => {
       const promise = service['callVerifyApi']('fake-entra-jwt');
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/verify`);
-      req.flush({ userId: 'user123' }, { status: 200, statusText: 'OK' });
+      req.flush({ success: true }, { status: 200, statusText: 'OK' });
 
       const result = await promise;
 
@@ -121,17 +120,17 @@ describe('AuthService', () => {
       expect(result.message).toBe('SERVER_ERROR');
     });
 
-    it('200だがuserIdがない場合は失敗を返す', async () => {
+    it('200だがsuccess:falseの場合は失敗を返す', async () => {
       const promise = service['callVerifyApi']('fake-entra-jwt');
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/verify`);
-      req.flush({}, { status: 200, statusText: 'OK' });
+      req.flush({ success: false }, { status: 200, statusText: 'OK' });
 
       const result = await promise;
 
       expect(result.success).toBeFalse();
       expect(result.httpStatus).toBe(200);
-      expect(result.message).toBe('userId なし');
+      expect(result.message).toBe('success=false');
       expect(tokenService.saveToken).not.toHaveBeenCalled();
     });
 
@@ -166,7 +165,7 @@ describe('AuthService', () => {
     it('成功時はsuccessを返す', async () => {
       tokenService.getToken.and.returnValue('fake-jwt');
 
-      const promise = service['callValidateApi']('user123');
+      const promise = service['callValidateApi']();
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/validate`);
       expect(req.request.method).toBe('POST');
@@ -182,7 +181,7 @@ describe('AuthService', () => {
     it('200だがsuccess:falseの場合はfailを返す', async () => {
       tokenService.getToken.and.returnValue('fake-jwt');
 
-      const promise = service['callValidateApi']('user123');
+      const promise = service['callValidateApi']();
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/validate`);
       req.flush({ success: false, message: 'sub mismatch' });
@@ -195,7 +194,7 @@ describe('AuthService', () => {
     it('401エラー時はretryを返す', async () => {
       tokenService.getToken.and.returnValue('fake-jwt');
 
-      const promise = service['callValidateApi']('user123');
+      const promise = service['callValidateApi']();
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/validate`);
       req.flush({}, { status: 401, statusText: 'Unauthorized' });
@@ -208,7 +207,7 @@ describe('AuthService', () => {
     it('500エラー時はretryを返す', async () => {
       tokenService.getToken.and.returnValue('fake-jwt');
 
-      const promise = service['callValidateApi']('user123');
+      const promise = service['callValidateApi']();
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/validate`);
       req.flush({}, { status: 500, statusText: 'Internal Server Error' });
@@ -221,7 +220,7 @@ describe('AuthService', () => {
     it('トークンなしでもAuthorizationなしで検証APIを呼び出す', async () => {
       tokenService.getToken.and.returnValue(null);
 
-      const promise = service['callValidateApi']('user123');
+      const promise = service['callValidateApi']();
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/validate`);
       expect(req.request.headers.has('Authorization')).toBeFalse();
@@ -235,7 +234,7 @@ describe('AuthService', () => {
     it('ネットワークエラー時はretryを返す', async () => {
       tokenService.getToken.and.returnValue('fake-jwt');
 
-      const promise = service['callValidateApi']('user123');
+      const promise = service['callValidateApi']();
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/validate`);
       req.error(new ProgressEvent('network error'), { status: 0, statusText: 'Unknown Error' });
@@ -248,7 +247,7 @@ describe('AuthService', () => {
     it('401以外の4xxエラー時はfailを返す', async () => {
       tokenService.getToken.and.returnValue('fake-jwt');
 
-      const promise = service['callValidateApi']('user123');
+      const promise = service['callValidateApi']();
 
       const req = httpMock.expectOne(`${testEnvironment.apiBaseUrl}/auth/validate`);
       req.flush({ message: 'FORBIDDEN' }, { status: 403, statusText: 'Forbidden' });
@@ -261,7 +260,7 @@ describe('AuthService', () => {
     it('tokenService.getTokenが例外を投げた場合はfailを返す', async () => {
       tokenService.getToken.and.throwError(new Error('token read error'));
 
-      const result = await service['callValidateApi']('user123');
+      const result = await service['callValidateApi']();
 
       expect(result).toBe('fail');
       httpMock.expectNone(`${testEnvironment.apiBaseUrl}/auth/validate`);
@@ -400,7 +399,6 @@ describe('AuthService', () => {
     it('verify成功 + validate成功なら成功結果を返してcleanupする', async () => {
       spyOn(service as any, 'callVerifyApi').and.returnValue(Promise.resolve({
         success: true,
-        userId: 'user123',
         httpStatus: 200
       }));
       spyOn(service as any, 'callValidateApi').and.returnValue(Promise.resolve('success'));
@@ -410,7 +408,7 @@ describe('AuthService', () => {
 
       expect(result.success).toBeTrue();
       expect(service['callVerifyApi']).toHaveBeenCalledWith('entra-jwt');
-      expect(service['callValidateApi']).toHaveBeenCalledWith('user123');
+      expect(service['callValidateApi']).toHaveBeenCalledWith();
       expect(service['cleanup']).toHaveBeenCalled();
     });
 
@@ -448,7 +446,6 @@ describe('AuthService', () => {
     it('validate retryならretryAuthFlowの結果を返す', async () => {
       spyOn(service as any, 'callVerifyApi').and.returnValue(Promise.resolve({
         success: true,
-        userId: 'user123',
         httpStatus: 200
       }));
       spyOn(service as any, 'callValidateApi').and.returnValue(Promise.resolve('retry'));
@@ -457,14 +454,13 @@ describe('AuthService', () => {
       const result = await service['runAuthFlow']('entra-jwt');
 
       expect(result.success).toBeTrue();
-      expect(service['callValidateApi']).toHaveBeenCalledWith('user123');
+      expect(service['callValidateApi']).toHaveBeenCalledWith();
       expect(service['retryAuthFlow']).toHaveBeenCalled();
     });
 
     it('validate failならINTERNAL_AUTH_FAILEDを返してcleanupする', async () => {
       spyOn(service as any, 'callVerifyApi').and.returnValue(Promise.resolve({
         success: true,
-        userId: 'user123',
         httpStatus: 200
       }));
       spyOn(service as any, 'callValidateApi').and.returnValue(Promise.resolve('fail'));

@@ -63,6 +63,21 @@ describe('AuthGuardT', () => {
       expect(tokenRefreshServiceSpy.performSilentRefresh).not.toHaveBeenCalled();
     });
 
+    it('JWT有効 + /login アクセス → /dashboard へリダイレクト（UrlTree返却）', async () => {
+      // Arrange
+      const loginState = { url: '/login' } as RouterStateSnapshot;
+      tokenServiceSpy.isTokenValid.and.returnValue(true);
+      const mockUrlTree = {} as UrlTree;
+      routerSpy.createUrlTree.and.returnValue(mockUrlTree);
+
+      // Act
+      const result = await guard.canActivate(mockRoute, loginState);
+
+      // Assert
+      expect(result).toBe(mockUrlTree);
+      expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/dashboard']);
+    });
+
     it('JWT無効 → サイレント更新成功 → true を返す', async () => {
       // Arrange
       tokenServiceSpy.isTokenValid.and.returnValue(false);
@@ -87,8 +102,9 @@ describe('AuthGuardT', () => {
 
       // Assert
       expect(result).toBe(false);
-      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
-      expect(history.state.errorMessage).toBe('セッションの有効期限が切れました。再度ログインしてください。');
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], {
+        state: { errorMessage: 'セッションの有効期限が切れました。再度ログインしてください。' }
+      });
     });
 
     it('JWT無効 → サイレント更新失敗（例外）→ プログラム遷移 → /login へリダイレクト', async () => {
@@ -102,8 +118,9 @@ describe('AuthGuardT', () => {
 
       // Assert
       expect(result).toBe(false);
-      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
-      expect(history.state.errorMessage).toBe('セッションの有効期限が切れました。再度ログインしてください。');
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], {
+        state: { errorMessage: 'セッションの有効期限が切れました。再度ログインしてください。' }
+      });
     });
 
     it('JWT無効 → サイレント更新失敗 → 直接アクセス → Entra ID認証を実行', async () => {
@@ -150,6 +167,21 @@ describe('AuthGuardT', () => {
       expect(result).toBe(true);
     });
 
+    it('JWT有効 + /login アクセス → /dashboard へリダイレクト（UrlTree返却）', async () => {
+      // Arrange
+      const loginState = { url: '/login' } as RouterStateSnapshot;
+      tokenServiceSpy.isTokenValid.and.returnValue(true);
+      const mockUrlTree = {} as UrlTree;
+      routerSpy.createUrlTree.and.returnValue(mockUrlTree);
+
+      // Act
+      const result = await guard.canActivateChild(mockChildRoute, loginState);
+
+      // Assert
+      expect(result).toBe(mockUrlTree);
+      expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/dashboard']);
+    });
+
     it('JWT無効 → サイレント更新成功 → true を返す', async () => {
       // Arrange
       tokenServiceSpy.isTokenValid.and.returnValue(false);
@@ -173,8 +205,9 @@ describe('AuthGuardT', () => {
 
       // Assert
       expect(result).toBe(false);
-      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
-      expect(history.state.errorMessage).toBe('セッションの有効期限が切れました。再度ログインしてください。');
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], {
+        state: { errorMessage: 'セッションの有効期限が切れました。再度ログインしてください。' }
+      });
     });
   });
 });
