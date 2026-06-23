@@ -21,7 +21,7 @@ export class ErrorInterceptor implements HttpInterceptor {
   private skipUrls = ['/auth/', '/stub/'];
 
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<any> {
-    const shouldSkip = this.skipUrls.some(url => req.url.includes(url));
+    const shouldSkip = this.skipUrls.some(url => req.url.startsWith(url));
 
     if (shouldSkip) {
       return next.handle(req);
@@ -29,32 +29,21 @@ export class ErrorInterceptor implements HttpInterceptor {
 
     // 業務APIのエラーを処理
     return next.handle(req).pipe(
-      catchError((error: HttpErrorResponse) => this.handleHttpError(error, req, next))
+      catchError((error: HttpErrorResponse) => {
+        if (error.status === 401) {
+          // 業務JWT無効 → サイレント更新
+          console.warn('[errorInterceptor] 401エラー: サイレント更新開始');
+          return this.handle401Error(req, next);
+        } else if (error.status === 403) {
+          // 権限エラー → forbidden ページ
+          console.warn('[errorInterceptor] 403エラー: 権限なし');
+          this.router.navigate(['/error/forbidden']);
+          return EMPTY;
+        }
+        // その他のエラーはそのまま伝播
+        return throwError(() => error);
+      })
     );
-  }
-
-  /**
-   * HTTPエラーを処理
-   */
-  private handleHttpError(
-    error: HttpErrorResponse,
-    req: HttpRequest<any>,
-    next: HttpHandler
-  ): Observable<any> {
-    if (error.status === 401) {
-      // 業務JWT無効 → サイレント更新
-      console.warn('[errorInterceptor] 401エラー: サイレント更新開始');
-      return this.handle401Error(req, next);
-      
-    } else if (error.status === 403) {
-      // 権限エラー → forbidden ページ
-      console.warn('[errorInterceptor] 403エラー: 権限なし');
-      this.router.navigate(['/error/forbidden']);
-      return EMPTY;
-    }
-
-    // その他のエラーはそのまま伝播
-    return throwError(() => error);
   }
 
   /**

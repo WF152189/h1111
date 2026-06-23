@@ -92,6 +92,50 @@ describe('errorInterceptor', () => {
       expect(tokenRefreshServiceSpy.performSilentRefresh).not.toHaveBeenCalled();
       expect(routerSpy.navigate).not.toHaveBeenCalled();
     });
+    it('/api/auth/ を含む業務APIはスキップせず401処理を行う', fakeAsync(() => {
+      const businessAuthUrl = '/api/auth/business';
+      const newToken = 'new-jwt-token';
+      tokenRefreshServiceSpy.performSilentRefresh.and.returnValue(Promise.resolve(newToken));
+
+      httpClient.get(businessAuthUrl).subscribe((response) => {
+        expect(response).toEqual({ data: 'success' });
+      });
+
+      const req1 = httpMock.expectOne(businessAuthUrl);
+      req1.flush(null, { status: 401, statusText: 'Unauthorized' });
+      tick();
+
+      const req2 = httpMock.expectOne((request) => {
+        return request.url === businessAuthUrl &&
+               request.headers.get('Authorization') === 'Bearer ' + newToken;
+      });
+      req2.flush({ data: 'success' });
+
+      expect(tokenRefreshServiceSpy.performSilentRefresh).toHaveBeenCalledTimes(1);
+    }));
+
+    it('/api/stub/ を含む業務APIはスキップせず401処理を行う', fakeAsync(() => {
+      const businessStubUrl = '/api/stub/business';
+      const newToken = 'new-jwt-token';
+      tokenRefreshServiceSpy.performSilentRefresh.and.returnValue(Promise.resolve(newToken));
+
+      httpClient.get(businessStubUrl).subscribe((response) => {
+        expect(response).toEqual({ data: 'success' });
+      });
+
+      const req1 = httpMock.expectOne(businessStubUrl);
+      req1.flush(null, { status: 401, statusText: 'Unauthorized' });
+      tick();
+
+      const req2 = httpMock.expectOne((request) => {
+        return request.url === businessStubUrl &&
+               request.headers.get('Authorization') === 'Bearer ' + newToken;
+      });
+      req2.flush({ data: 'success' });
+
+      expect(tokenRefreshServiceSpy.performSilentRefresh).toHaveBeenCalledTimes(1);
+    }));
+
   });
 
   describe('401エラー処理（サイレント更新）', () => {
@@ -151,6 +195,30 @@ describe('errorInterceptor', () => {
         }
       });
     }));
+    it('401でサイレント更新がnullを返した場合、next/errorを呼ばずcompleteする', fakeAsync(() => {
+      let nextCalled = false;
+      let errorCalled = false;
+      let completeCalled = false;
+      tokenRefreshServiceSpy.performSilentRefresh.and.returnValue(Promise.resolve(null));
+
+      httpClient.get(apiUrl).subscribe({
+        next: () => { nextCalled = true; },
+        error: () => { errorCalled = true; },
+        complete: () => { completeCalled = true; }
+      });
+
+      const req = httpMock.expectOne(apiUrl);
+      req.flush(null, { status: 401, statusText: 'Unauthorized' });
+      tick();
+
+      expect(nextCalled).toBeFalse();
+      expect(errorCalled).toBeFalse();
+      expect(completeCalled).toBeTrue();
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], jasmine.objectContaining({
+        queryParams: jasmine.objectContaining({ reason: 'session_expired' })
+      }));
+    }));
+
 
     it('401エラー時、サイレント更新がrejectするとログインページへリダイレクト', fakeAsync(() => {
       // Arrange
@@ -176,6 +244,30 @@ describe('errorInterceptor', () => {
         }
       });
     }));
+    it('401でサイレント更新がrejectした場合、next/errorを呼ばずcompleteする', fakeAsync(() => {
+      let nextCalled = false;
+      let errorCalled = false;
+      let completeCalled = false;
+      tokenRefreshServiceSpy.performSilentRefresh.and.returnValue(Promise.reject(new Error('refresh failed')));
+
+      httpClient.get(apiUrl).subscribe({
+        next: () => { nextCalled = true; },
+        error: () => { errorCalled = true; },
+        complete: () => { completeCalled = true; }
+      });
+
+      const req = httpMock.expectOne(apiUrl);
+      req.flush(null, { status: 401, statusText: 'Unauthorized' });
+      tick();
+
+      expect(nextCalled).toBeFalse();
+      expect(errorCalled).toBeFalse();
+      expect(completeCalled).toBeTrue();
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], jasmine.objectContaining({
+        queryParams: jasmine.objectContaining({ reason: 'session_expired' })
+      }));
+    }));
+
 
     it('複数の401エラー同時発生時、interceptorは各リクエストごとにサイレント更新を呼び出す', fakeAsync(() => {
       // Arrange
@@ -241,6 +333,35 @@ describe('errorInterceptor', () => {
           message: 'セッションの有効期限が切れました。再度ログインしてください。'
         }
       });
+    }));
+
+    it('リトライ後も401の場合、next/errorを呼ばずcompleteする', fakeAsync(() => {
+      let nextCalled = false;
+      let errorCalled = false;
+      let completeCalled = false;
+      const newToken = 'new-jwt-token';
+      tokenRefreshServiceSpy.performSilentRefresh.and.returnValue(Promise.resolve(newToken));
+
+      httpClient.get(apiUrl).subscribe({
+        next: () => { nextCalled = true; },
+        error: () => { errorCalled = true; },
+        complete: () => { completeCalled = true; }
+      });
+
+      const req1 = httpMock.expectOne(apiUrl);
+      req1.flush(null, { status: 401, statusText: 'Unauthorized' });
+      tick();
+
+      const req2 = httpMock.expectOne(apiUrl);
+      expect(req2.request.headers.get('Authorization')).toBe('Bearer ' + newToken);
+      req2.flush(null, { status: 401, statusText: 'Unauthorized' });
+
+      expect(nextCalled).toBeFalse();
+      expect(errorCalled).toBeFalse();
+      expect(completeCalled).toBeTrue();
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login'], jasmine.objectContaining({
+        queryParams: jasmine.objectContaining({ reason: 'session_expired' })
+      }));
     }));
 
     it('リトライ後はperformSilentRefreshを呼び出さない', fakeAsync(() => {
