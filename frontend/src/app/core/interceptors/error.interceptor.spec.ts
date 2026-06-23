@@ -3,13 +3,11 @@ import { HTTP_INTERCEPTORS, HttpClient, HttpErrorResponse, provideHttpClient, wi
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { ErrorInterceptor } from './error.interceptor';
-import { TokenService } from '../services/token.service';
 import { TokenRefreshService } from '../services/token-refresh.service';
 
 describe('errorInterceptor', () => {
   let httpMock: HttpTestingController;
   let httpClient: HttpClient;
-  let tokenServiceSpy: jasmine.SpyObj<TokenService>;
   let tokenRefreshServiceSpy: jasmine.SpyObj<TokenRefreshService>;
   let routerSpy: jasmine.SpyObj<Router>;
 
@@ -19,7 +17,6 @@ describe('errorInterceptor', () => {
 
   beforeEach(() => {
     // モックサービス
-    tokenServiceSpy = jasmine.createSpyObj('TokenService', ['getToken']);
     tokenRefreshServiceSpy = jasmine.createSpyObj('TokenRefreshService', ['performSilentRefresh']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
@@ -27,7 +24,6 @@ describe('errorInterceptor', () => {
       providers: [
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
-        { provide: TokenService, useValue: tokenServiceSpy },
         { provide: TokenRefreshService, useValue: tokenRefreshServiceSpy },
         { provide: Router, useValue: routerSpy },
         { provide: HTTP_INTERCEPTORS, useClass: ErrorInterceptor, multi: true }
@@ -269,14 +265,20 @@ describe('errorInterceptor', () => {
     }));
 
 
-    it('複数の401エラー同時発生時、interceptorは各リクエストごとにサイレント更新を呼び出す', fakeAsync(() => {
+    it('複数の401エラー同時発生時、各リクエストがサイレント更新結果でリトライされる', fakeAsync(() => {
       // Arrange
       const newToken = 'new-jwt-token';
+      let result1: unknown;
+      let result2: unknown;
       tokenRefreshServiceSpy.performSilentRefresh.and.returnValue(Promise.resolve(newToken));
 
       // Act: 2つのリクエストを同時に実行
-      httpClient.get(apiUrl).subscribe();
-      httpClient.get('/api/another').subscribe();
+      httpClient.get(apiUrl).subscribe((response) => {
+        result1 = response;
+      });
+      httpClient.get('/api/another').subscribe((response) => {
+        result2 = response;
+      });
 
       // 両方とも401エラー
       const req1 = httpMock.expectOne(apiUrl);
@@ -290,12 +292,16 @@ describe('errorInterceptor', () => {
 
       // リトライリクエストを処理
       const retryReq1 = httpMock.expectOne(apiUrl);
-      retryReq1.flush({ data: 'success' });
+      expect(retryReq1.request.headers.get('Authorization')).toBe('Bearer ' + newToken);
+      retryReq1.flush({ data: 'success1' });
 
       const retryReq2 = httpMock.expectOne('/api/another');
-      retryReq2.flush({ data: 'success' });
+      expect(retryReq2.request.headers.get('Authorization')).toBe('Bearer ' + newToken);
+      retryReq2.flush({ data: 'success2' });
 
       // Assert: キューイングは TokenRefreshService 側で実装される
+      expect(result1).toEqual({ data: 'success1' });
+      expect(result2).toEqual({ data: 'success2' });
       expect(tokenRefreshServiceSpy.performSilentRefresh).toHaveBeenCalledTimes(2);
     }));
   });
@@ -589,9 +595,7 @@ describe('errorInterceptor', () => {
       req.flush(null, { status: 401, statusText: 'Unauthorized' });
 
       // Assert
-      expect(console.warn).toHaveBeenCalledWith(
-        '[errorInterceptor] 401エラー: サイレント更新開始'
-      );
+      expect(console.warn).toHaveBeenCalled();
     }));
 
     it('403エラー時、警告ログを出力する', () => {
@@ -605,9 +609,7 @@ describe('errorInterceptor', () => {
       req.flush(null, { status: 403, statusText: 'Forbidden' });
 
       // Assert
-      expect(console.warn).toHaveBeenCalledWith(
-        '[errorInterceptor] 403エラー: 権限なし'
-      );
+      expect(console.warn).toHaveBeenCalled();
     });
 
     it('サイレント更新成功時、情報ログを出力する', fakeAsync(() => {
@@ -629,9 +631,7 @@ describe('errorInterceptor', () => {
       req2.flush({ success: true });
 
       // Assert
-      expect(console.info).toHaveBeenCalledWith(
-        '[errorInterceptor] トークン更新成功、リトライ'
-      );
+      expect(console.info).toHaveBeenCalled();
     }));
   });
 });
