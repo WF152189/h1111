@@ -14,4 +14,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ScreenPermissionRequest {
     private String screenId;
+    private String typeId;
 }

@@ -25,7 +25,7 @@ class EntraIdJwtValidatorTest {
     private final JwtService jwtService = mock(JwtService.class);
 
     @Nested
-    @DisplayName("stub mode")
+    @DisplayName("スタブモード")
     class StubMode {
 
         @Test
@@ -45,7 +45,7 @@ class EntraIdJwtValidatorTest {
         }
 
         @Test
-        @DisplayName("stubモードでJwtServiceが例外を投げた場合はそのまま伝播する")
+        @DisplayName("スタブモードでJwtServiceが例外を投げた場合はそのまま伝播する")
         void validateEntraIdToken_stubMode_propagatesJwtException() {
             String token = "invalid-stub-entra-jwt";
             JwtException exception = new JwtException("invalid");
@@ -60,11 +60,11 @@ class EntraIdJwtValidatorTest {
     }
 
     @Nested
-    @DisplayName("production mode")
+    @DisplayName("本番モード")
     class ProductionMode {
 
         @Test
-        @DisplayName("productionモードで不正JWTを渡すとENTRA_JWT_INVALIDを投げる")
+        @DisplayName("JWT形式でない文字列を渡すとENTRA_JWT_INVALIDを投げる")
         void validateEntraIdToken_invalidJwt_throwsAuthException() {
             EntraIdJwtValidator validator = new EntraIdJwtValidator(
                     TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
@@ -75,69 +75,88 @@ class EntraIdJwtValidatorTest {
         }
 
         @Test
-        @DisplayName("Issuerが一致しない場合はENTRA_JWT_INVALIDを投げる")
-        void validateClaims_issuerMismatch_throwsAuthException() throws Exception {
+        @DisplayName("JWT形式だが署名が無効な場合はENTRA_JWT_INVALIDを投げる")
+        void validateEntraIdToken_malformedSignature_throwsAuthException() {
             EntraIdJwtValidator validator = new EntraIdJwtValidator(
                     TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
-            com.nimbusds.jwt.JWTClaimsSet claimsSet = new com.nimbusds.jwt.JWTClaimsSet.Builder()
-                    .subject("user123")
-                    .issuer("https://invalid.example.com")
-                    .audience(CLIENT_ID)
-                    .build();
 
-            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(validator, "validateClaims", claimsSet))
+            // JWT形式（header.payload.signature）だが署名が無効
+            String malformedJwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMTIzIn0.invalid-signature";
+
+            assertThatThrownBy(() -> validator.validateEntraIdToken(malformedJwt))
                     .isInstanceOf(AuthException.class)
                     .hasFieldOrPropertyWithValue("errorCode", "ENTRA_JWT_INVALID");
         }
 
-        @Test
-        @DisplayName("Audienceが一致しない場合はENTRA_JWT_INVALIDを投げる")
-        void validateClaims_audienceMismatch_throwsAuthException() throws Exception {
-            EntraIdJwtValidator validator = new EntraIdJwtValidator(
-                    TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
-            com.nimbusds.jwt.JWTClaimsSet claimsSet = new com.nimbusds.jwt.JWTClaimsSet.Builder()
-                    .subject("user123")
-                    .issuer(ISSUER)
-                    .audience("other-client-id")
-                    .build();
+        @Nested
+        @DisplayName("実装詳細: privateメソッドの検証")
+        class PrivateMethodTests {
 
-            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(validator, "validateClaims", claimsSet))
-                    .isInstanceOf(AuthException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", "ENTRA_JWT_INVALID");
-        }
+            @Test
+            @DisplayName("Issuerが一致しない場合はENTRA_JWT_INVALIDを投げる")
+            void validateClaims_issuerMismatch_throwsAuthException() throws Exception {
+                EntraIdJwtValidator validator = new EntraIdJwtValidator(
+                        TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
+                com.nimbusds.jwt.JWTClaimsSet claimsSet = new com.nimbusds.jwt.JWTClaimsSet.Builder()
+                        .subject("user123")
+                        .issuer("https://invalid.example.com")
+                        .audience(CLIENT_ID)
+                        .build();
 
-        @Test
-        @DisplayName("IssuerとAudienceが一致する場合は例外を投げない")
-        void validateClaims_validClaims_doesNotThrow() throws Exception {
-            EntraIdJwtValidator validator = new EntraIdJwtValidator(
-                    TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
-            com.nimbusds.jwt.JWTClaimsSet claimsSet = new com.nimbusds.jwt.JWTClaimsSet.Builder()
-                    .subject("user123")
-                    .issuer(ISSUER)
-                    .audience(List.of("other-client-id", CLIENT_ID))
-                    .build();
+                assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(validator, "validateClaims", claimsSet))
+                        .isInstanceOf(AuthException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", "ENTRA_JWT_INVALID");
+            }
 
-            ReflectionTestUtils.invokeMethod(validator, "validateClaims", claimsSet);
-        }
+            @Test
+            @DisplayName("Audienceが一致しない場合はENTRA_JWT_INVALIDを投げる")
+            void validateClaims_audienceMismatch_throwsAuthException() throws Exception {
+                EntraIdJwtValidator validator = new EntraIdJwtValidator(
+                        TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
+                com.nimbusds.jwt.JWTClaimsSet claimsSet = new com.nimbusds.jwt.JWTClaimsSet.Builder()
+                        .subject("user123")
+                        .issuer(ISSUER)
+                        .audience("other-client-id")
+                        .build();
 
-        @Test
-        @DisplayName("Nimbus claimsをJJWT Claimsへ変換する")
-        void convertToJwtClaims_mapsNimbusClaims() throws Exception {
-            EntraIdJwtValidator validator = new EntraIdJwtValidator(
-                    TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
-            com.nimbusds.jwt.JWTClaimsSet claimsSet = new com.nimbusds.jwt.JWTClaimsSet.Builder()
-                    .subject("user123")
-                    .issuer(ISSUER)
-                    .audience(CLIENT_ID)
-                    .claim("email", "user@example.com")
-                    .build();
+                assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(validator, "validateClaims", claimsSet))
+                        .isInstanceOf(AuthException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", "ENTRA_JWT_INVALID");
+            }
 
-            Claims result = ReflectionTestUtils.invokeMethod(validator, "convertToJwtClaims", claimsSet);
+            @Test
+            @DisplayName("IssuerとAudienceが一致する場合は例外を投げない")
+            void validateClaims_validClaims_doesNotThrow() throws Exception {
+                EntraIdJwtValidator validator = new EntraIdJwtValidator(
+                        TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
+                com.nimbusds.jwt.JWTClaimsSet claimsSet = new com.nimbusds.jwt.JWTClaimsSet.Builder()
+                        .subject("user123")
+                        .issuer(ISSUER)
+                        .audience(List.of("other-client-id", CLIENT_ID))
+                        .build();
 
-            assertThat(result).isNotNull();
-            assertThat(result.getSubject()).isEqualTo("user123");
-            assertThat(result.getIssuer()).isEqualTo(ISSUER);
-            assertThat(result.get("email", String.class)).isEqualTo("user@example.com");
+                ReflectionTestUtils.invokeMethod(validator, "validateClaims", claimsSet);
+            }
+
+            @Test
+            @DisplayName("Nimbus claimsをJJWT Claimsへ変換する")
+            void convertToJwtClaims_mapsNimbusClaims() throws Exception {
+                EntraIdJwtValidator validator = new EntraIdJwtValidator(
+                        TENANT_ID, CLIENT_ID, ISSUER, JWKS_URI, false, jwtService);
+                com.nimbusds.jwt.JWTClaimsSet claimsSet = new com.nimbusds.jwt.JWTClaimsSet.Builder()
+                        .subject("user123")
+                        .issuer(ISSUER)
+                        .audience(CLIENT_ID)
+                        .claim("email", "user@example.com")
+                        .build();
+
+                Claims result = ReflectionTestUtils.invokeMethod(validator, "convertToJwtClaims", claimsSet);
+
+                assertThat(result).isNotNull();
+                assertThat(result.getSubject()).isEqualTo("user123");
+                assertThat(result.getIssuer()).isEqualTo(ISSUER);
+                assertThat(result.get("email", String.class)).isEqualTo("user@example.com");
+            }
         }
     }
 }
