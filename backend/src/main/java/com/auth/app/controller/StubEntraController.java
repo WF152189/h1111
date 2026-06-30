@@ -58,6 +58,14 @@ public class StubEntraController {
         html.append(".footer{margin-top:24px;padding-top:16px;border-top:1px solid #e0e0e0;text-align:center;}");
         html.append(".footer-text{font-size:12px;color:#999;}");
         html.append(".stub-notice{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:12px;margin-bottom:20px;font-size:12px;color:#856404;}");
+        html.append(".divider{display:flex;align-items:center;margin:20px 0;}");
+        html.append(".divider::before,.divider::after{content:'';flex:1;border-bottom:1px solid #e0e0e0;}");
+        html.append(".divider-text{padding:0 12px;font-size:12px;color:#999;}");
+        html.append(".manual-input{display:flex;gap:8px;margin-bottom:16px;}");
+        html.append(".manual-input input{flex:1;padding:10px 12px;border:1px solid #e0e0e0;border-radius:2px;font-size:14px;outline:none;transition:border-color 0.2s;}");
+        html.append(".manual-input input:focus{border-color:#0078d4;}");
+        html.append(".manual-input button{padding:10px 20px;background:#0078d4;color:#fff;border:none;border-radius:2px;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.2s;}");
+        html.append(".manual-input button:hover{background:#005a9e;}");
         html.append("</style></head><body>");
         html.append("<div class='login-container'>");
         
@@ -101,6 +109,15 @@ public class StubEntraController {
         
         html.append("</ul>");
         
+        // 区切り線
+        html.append("<div class='divider'><span class='divider-text'>または</span></div>");
+        
+        // 手動入力フォーム
+        html.append("<div class='manual-input'>");
+        html.append("<input type='text' id='manualUserId' placeholder='ユーザーIDを入力' />");
+        html.append("<button onclick='submitManualUserId()'>ログイン</button>");
+        html.append("</div>");
+        
         // 隠しフォーム
         html.append("<form id='userForm' method='POST' action='/stub/entra/authorize/submit' style='display:none;'>");
         html.append("<input type='hidden' name='user_id' id='userId'/>");
@@ -121,6 +138,15 @@ public class StubEntraController {
         html.append("  document.getElementById('userId').value = userId;");
         html.append("  document.getElementById('userForm').submit();");
         html.append("}");
+        html.append("function submitManualUserId() {");
+        html.append("  var input = document.getElementById('manualUserId').value.trim();");
+        html.append("  if (!input) { alert('ユーザーIDを入力してください'); return; }");
+        html.append("  document.getElementById('userId').value = input;");
+        html.append("  document.getElementById('userForm').submit();");
+        html.append("}");
+        html.append("document.getElementById('manualUserId').addEventListener('keypress', function(e) {");
+        html.append("  if (e.key === 'Enter') { e.preventDefault(); submitManualUserId(); }");
+        html.append("});");
         html.append("</script>");
         
         html.append("</body></html>");
