@@ -100,6 +100,109 @@ public class HttpClient {
     }
 
     /**
+     * POST リクエストを実行（Object body版）
+     * 
+     * DTO オブジェクトをJSONとして送信
+     * 
+     * @param url リクエスト先URL
+     * @param requestBody リクエストボディ（Object、DTOなど）
+     * @return レスポンスボディ（Map形式）
+     * @throws HttpClientException HTTP エラー時
+     * @throws RuntimeException ネットワークエラー時
+     */
+    public Map<String, Object> post(String url, Object requestBody) {
+        log.debug("HTTP POST リクエスト開始: url={}, body={}", url, requestBody);
+
+        try {
+            Map<String, Object> response = webClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .block();
+
+            log.debug("HTTP POST レスポンス受信: url={}, response={}", url, response);
+
+            if (response == null) {
+                log.error("HTTP POST 空のレスポンス: url={}", url);
+                throw new HttpClientException("外部システムから空のレスポンスが返されました");
+            }
+
+            return response;
+
+        } catch (WebClientResponseException e) {
+            log.error("HTTP POST エラー: url={}, status={}, body={}", 
+                url, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new HttpClientException(
+                "HTTP エラーが発生しました: " + e.getStatusCode() + " - " + e.getResponseBodyAsString(),
+                e
+            );
+        } catch (HttpClientException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("HTTP POST 例外: url={}, error={}", url, e.getMessage(), e);
+            throw new HttpClientException(
+                "外部システムとの通信に失敗しました: " + e.getMessage(),
+                e
+            );
+        }
+    }
+
+    /**
+     * POST リクエストを実行（DTO直接バインド版）
+     * 
+     * レスポンスを指定されたDTO型に直接バインド
+     * 
+     * @param <T> レスポンス型
+     * @param url リクエスト先URL
+     * @param requestBody リクエストボディ（Object、DTOなど）
+     * @param responseType レスポンスのDTOクラス
+     * @return レスポンスDTO
+     * @throws HttpClientException HTTP エラー時
+     * @throws RuntimeException ネットワークエラー時
+     */
+    public <T> T post(String url, Object requestBody, Class<T> responseType) {
+        log.debug("HTTP POST リクエスト開始（DTO直接バインド）: url={}, body={}, responseType={}", 
+            url, requestBody, responseType.getSimpleName());
+
+        try {
+            T response = webClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(responseType)
+                .block();
+
+            log.debug("HTTP POST レスポンス受信: url={}, response={}", url, response);
+
+            if (response == null) {
+                log.error("HTTP POST 空のレスポンス: url={}", url);
+                throw new HttpClientException("外部システムから空のレスポンスが返されました");
+            }
+
+            return response;
+
+        } catch (WebClientResponseException e) {
+            log.error("HTTP POST エラー: url={}, status={}, body={}", 
+                url, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new HttpClientException(
+                "HTTP エラーが発生しました: " + e.getStatusCode() + " - " + e.getResponseBodyAsString(),
+                e
+            );
+        } catch (HttpClientException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("HTTP POST 例外: url={}, error={}", url, e.getMessage(), e);
+            throw new HttpClientException(
+                "外部システムとの通信に失敗しました: " + e.getMessage(),
+                e
+            );
+        }
+    }
+
+    /**
      * POST リクエストを実行（ヘッダーカスタマイズ版）
      * 
      * @param url リクエスト先URL

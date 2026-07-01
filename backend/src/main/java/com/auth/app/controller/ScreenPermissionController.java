@@ -72,7 +72,10 @@ public class ScreenPermissionController {
         
         try {
             // 外部API呼び出し（Service経由）
-            boolean authorized = screenPermissionService.checkPermission(screenId, userId, typeId);
+            boolean authorized = screenPermissionService.checkPermission(
+                    screenId, userId, typeId,
+                    request.getApi1Start(), request.getApi1End(),
+                    request.getApi2Start(), request.getApi2End());
             
             if (authorized) {
                 log.info("画面アクセス許可: userId={}, screenId={}, typeId={}", userId, screenId, typeId);

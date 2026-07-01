@@ -106,9 +106,13 @@ class ScreenPermissionControllerTest {
             ScreenPermissionRequest request = ScreenPermissionRequest.builder()
                     .screenId("SCREEN_1")
                     .typeId("A")
+                    .api1Start("08:00")
+                    .api1End("21:00")
+                    .api2Start("08:00")
+                    .api2End("23:59")
                     .build();
 
-            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "A"))
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "A", "08:00", "21:00", "08:00", "23:59"))
                     .thenReturn(true);
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
@@ -116,7 +120,7 @@ class ScreenPermissionControllerTest {
             assertThat(result.getStatusCode().is2xxSuccessful()).isTrue();
             assertThat(result.getBody().isAuthorized()).isTrue();
             assertThat(result.getBody().getMessage()).isEqualTo("アクセスが許可されています");
-            verify(screenPermissionService).checkPermission("SCREEN_1", "eeeeeeee", "A");
+            verify(screenPermissionService).checkPermission("SCREEN_1", "eeeeeeee", "A", "08:00", "21:00", "08:00", "23:59");
         }
     }
 
@@ -132,7 +136,7 @@ class ScreenPermissionControllerTest {
                     .typeId("B")
                     .build();
 
-            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "B"))
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "B", null, null, null, null))
                     .thenReturn(false);
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
@@ -155,7 +159,7 @@ class ScreenPermissionControllerTest {
                     .typeId("X")
                     .build();
 
-            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "X"))
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "X", null, null, null, null))
                     .thenThrow(new IllegalArgumentException("不明なtypeId: X"));
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
@@ -171,9 +175,13 @@ class ScreenPermissionControllerTest {
             ScreenPermissionRequest request = ScreenPermissionRequest.builder()
                     .screenId("SCREEN_1")
                     .typeId("A")
+                    .api1Start("08:00")
+                    .api1End("21:00")
+                    .api2Start("08:00")
+                    .api2End("23:59")
                     .build();
 
-            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "A"))
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "A", "08:00", "21:00", "08:00", "23:59"))
                     .thenThrow(new HttpClient.HttpClientException("connection failed"));
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);

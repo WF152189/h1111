@@ -105,7 +105,12 @@ export class PermissionGuardT implements CanActivate, CanActivateChild {
    * @returns `true`（アクセス許可）または `false`（アクセス拒否、エラーメッセージ表示）
    */
   private async checkPermission(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<boolean> {
-    const screenId: string = route.data?.['screenId'];
+    const screenId: string | undefined = route.data?.['screenId'];
+    const typeId: string | undefined = route.data?.['typeId'];
+    const api1Start: string | undefined = route.data?.['api1Start'];
+    const api1End: string | undefined = route.data?.['api1End'];
+    const api2Start: string | undefined = route.data?.['api2Start'];
+    const api2End: string | undefined = route.data?.['api2End'];
     
     // 画面IDが設定されていない場合は許可（デフォルト）
     if (!screenId) {
@@ -114,7 +119,9 @@ export class PermissionGuardT implements CanActivate, CanActivateChild {
     }
   
     // 画面権限をチェック
-    const result = await this.screenPermissionService.checkScreenPermission(screenId);
+    const result = await this.screenPermissionService.checkScreenPermission(
+      screenId, typeId, api1Start, api1End, api2Start, api2End
+    );
     
     if (result.authorized) {
       // アクセス許可
