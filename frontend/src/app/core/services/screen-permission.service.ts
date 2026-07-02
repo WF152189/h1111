@@ -33,16 +33,14 @@ export class ScreenPermissionService {
    * 2. 結果を返却
    * 
    * @param screenId 画面ID（例: 'BUSINESS_DATA_SCREEN'）
-   * @param typeId タイプID（'A'/'B'/'C'）
-   * @param api1Start API1運用開始時刻（A/Cタイプで必須）
-   * @param api1End API1運用終了時刻（A/Cタイプで必須）
-   * @param api2Start API2運用開始時刻（A/Bタイプで必須）
-   * @param api2End API2運用終了時刻（A/Bタイプで必須）
+   * @param api1Start API1運用開始時刻（API1利用時に指定）
+   * @param api1End API1運用終了時刻（API1利用時に指定）
+   * @param api2Start API2運用開始時刻（API2利用時に指定）
+   * @param api2End API2運用終了時刻（API2利用時に指定）
    * @returns 権限チェック結果
    */
   async checkScreenPermission(
     screenId: string,
-    typeId?: string,
     api1Start?: string,
     api1End?: string,
     api2Start?: string,
@@ -55,7 +53,6 @@ export class ScreenPermissionService {
           `${environment.apiBaseUrl}/api/screens/permission/check`,
           {
             screenId,
-            typeId,
             api1Start,
             api1End,
             api2Start,

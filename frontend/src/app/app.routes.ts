@@ -21,25 +21,25 @@ export const routes: Routes = [
     path: 'menu',
     loadComponent: () => import('./business/menu.component').then(m => m.MenuComponent),
     canActivate: [authAndPermissionGuard],
-    data: { screenId: 'MENU_SCREEN', typeId: 'B', api2Start: '08:00', api2End: '23:59' }
+    data: { screenId: 'MENU_SCREEN', api2Start: '00:00', api2End: '23:59' }
   },
   {
     path: 'business/data',
     loadComponent: () => import('./business/sample-data.component').then(m => m.SampleDataComponent),
     canActivate: [authAndPermissionGuard],
-    data: { screenId: 'BUSINESS_DATA_SCREEN', typeId: 'C', api1Start: '08:00', api1End: '21:00' }
+    data: { screenId: 'BUSINESS_DATA_SCREEN', api1Start: '08:00', api1End: '21:00' }
   },
   {
     path: 'admin/management',
     loadComponent: () => import('./business/admin-management.component').then(m => m.AdminManagementComponent),
     canActivate: [authAndPermissionGuard],
-    data: { screenId: 'ADMIN_MANAGEMENT_SCREEN', typeId: 'B', api2Start: '08:00', api2End: '23:59' }
+    data: { screenId: 'ADMIN_MANAGEMENT_SCREEN', api2Start: '00:00', api2End: '23:59' }
   },
   {
     path: 'settings',
     loadComponent: () => import('./business/settings/settings.component').then(m => m.SettingsComponent),
     canActivateChild: [authAndPermissionChildGuard],
-    data: { screenId: 'SETTINGS_SCREEN', typeId: 'A', api1Start: '08:00', api1End: '21:00', api2Start: '08:00', api2End: '23:59' }
+    data: { screenId: 'SETTINGS_SCREEN', api1Start: '08:00', api1End: '21:00', api2Start: '00:00', api2End: '23:59' }
   },
   {
     path: 'error/auth',

@@ -1,6 +1,7 @@
 package com.auth.app.controller;
 
 import com.auth.app.client.HttpClient;
+import com.auth.app.dto.PermissionCheckResult;
 import com.auth.app.dto.ScreenPermissionRequest;
 import com.auth.app.dto.ScreenPermissionResponse;
 import com.auth.app.service.ScreenPermissionService;
@@ -38,7 +39,6 @@ class ScreenPermissionControllerTest {
         void checkPermission_nullScreenId_returns400() {
             ScreenPermissionRequest request = ScreenPermissionRequest.builder()
                     .screenId(null)
-                    .typeId("A")
                     .build();
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
@@ -55,43 +55,12 @@ class ScreenPermissionControllerTest {
         void checkPermission_emptyScreenId_returns400() {
             ScreenPermissionRequest request = ScreenPermissionRequest.builder()
                     .screenId("")
-                    .typeId("A")
                     .build();
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
 
             assertThat(result.getStatusCode().value()).isEqualTo(400);
             assertThat(result.getBody().getReason()).isEqualTo("画面IDが無効です");
-            verifyNoInteractions(screenPermissionService);
-        }
-
-        @Test
-        @DisplayName("typeId が null → 400 Bad Request")
-        void checkPermission_nullTypeId_returns400() {
-            ScreenPermissionRequest request = ScreenPermissionRequest.builder()
-                    .screenId("SCREEN_1")
-                    .typeId(null)
-                    .build();
-
-            ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
-
-            assertThat(result.getStatusCode().value()).isEqualTo(400);
-            assertThat(result.getBody().getReason()).isEqualTo("タイプIDが無効です");
-            verifyNoInteractions(screenPermissionService);
-        }
-
-        @Test
-        @DisplayName("typeId が空文字 → 400 Bad Request")
-        void checkPermission_emptyTypeId_returns400() {
-            ScreenPermissionRequest request = ScreenPermissionRequest.builder()
-                    .screenId("SCREEN_1")
-                    .typeId("")
-                    .build();
-
-            ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
-
-            assertThat(result.getStatusCode().value()).isEqualTo(400);
-            assertThat(result.getBody().getReason()).isEqualTo("タイプIDが無効です");
             verifyNoInteractions(screenPermissionService);
         }
     }
@@ -101,26 +70,26 @@ class ScreenPermissionControllerTest {
     class Authorized {
 
         @Test
-        @DisplayName("Service が true を返す → 200 + authorized=true")
+        @DisplayName("Service が authorized=true を返す → 200 + authorized=true")
         void checkPermission_authorized_returns200() {
             ScreenPermissionRequest request = ScreenPermissionRequest.builder()
                     .screenId("SCREEN_1")
-                    .typeId("A")
                     .api1Start("08:00")
                     .api1End("21:00")
-                    .api2Start("08:00")
+                    .api2Start("00:00")
                     .api2End("23:59")
                     .build();
 
-            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "A", "08:00", "21:00", "08:00", "23:59"))
-                    .thenReturn(true);
+            PermissionCheckResult serviceResult = new PermissionCheckResult(true, null);
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "08:00", "21:00", "00:00", "23:59"))
+                    .thenReturn(serviceResult);
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
 
             assertThat(result.getStatusCode().is2xxSuccessful()).isTrue();
             assertThat(result.getBody().isAuthorized()).isTrue();
             assertThat(result.getBody().getMessage()).isEqualTo("アクセスが許可されています");
-            verify(screenPermissionService).checkPermission("SCREEN_1", "eeeeeeee", "A", "08:00", "21:00", "08:00", "23:59");
+            verify(screenPermissionService).checkPermission("SCREEN_1", "eeeeeeee", "08:00", "21:00", "00:00", "23:59");
         }
     }
 
@@ -129,15 +98,37 @@ class ScreenPermissionControllerTest {
     class Denied {
 
         @Test
-        @DisplayName("Service が false を返す → 200 + authorized=false")
-        void checkPermission_denied_returns200WithFalse() {
+        @DisplayName("Service が authorized=false + errorMessage を返す → 200 + authorized=false + reason=errorMessage")
+        void checkPermission_denied_withErrorMessage_returns200WithReason() {
             ScreenPermissionRequest request = ScreenPermissionRequest.builder()
                     .screenId("SCREEN_1")
-                    .typeId("B")
+                    .api2Start("00:00")
+                    .api2End("23:59")
                     .build();
 
-            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "B", null, null, null, null))
-                    .thenReturn(false);
+            PermissionCheckResult serviceResult = new PermissionCheckResult(false, "権限がありません");
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", null, null, "00:00", "23:59"))
+                    .thenReturn(serviceResult);
+
+            ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
+
+            assertThat(result.getStatusCode().is2xxSuccessful()).isTrue();
+            assertThat(result.getBody().isAuthorized()).isFalse();
+            assertThat(result.getBody().getReason()).isEqualTo("権限がありません");
+        }
+
+        @Test
+        @DisplayName("Service が authorized=false + errorMessage=null を返す → 200 + reason=デフォルトメッセージ")
+        void checkPermission_denied_withoutErrorMessage_returnsDefaultReason() {
+            ScreenPermissionRequest request = ScreenPermissionRequest.builder()
+                    .screenId("SCREEN_1")
+                    .api2Start("00:00")
+                    .api2End("23:59")
+                    .build();
+
+            PermissionCheckResult serviceResult = new PermissionCheckResult(false, null);
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", null, null, "00:00", "23:59"))
+                    .thenReturn(serviceResult);
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
 
@@ -156,17 +147,16 @@ class ScreenPermissionControllerTest {
         void checkPermission_illegalArgumentException_returns400() {
             ScreenPermissionRequest request = ScreenPermissionRequest.builder()
                     .screenId("SCREEN_1")
-                    .typeId("X")
                     .build();
 
-            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "X", null, null, null, null))
-                    .thenThrow(new IllegalArgumentException("不明なtypeId: X"));
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", null, null, null, null))
+                    .thenThrow(new IllegalArgumentException("運用時間情報が不正です。いずれかのAPIの運用時間が必要です"));
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);
 
             assertThat(result.getStatusCode().value()).isEqualTo(400);
             assertThat(result.getBody().isAuthorized()).isFalse();
-            assertThat(result.getBody().getReason()).isEqualTo("不明なtypeId: X");
+            assertThat(result.getBody().getReason()).isEqualTo("運用時間情報が不正です。いずれかのAPIの運用時間が必要です");
         }
 
         @Test
@@ -174,14 +164,13 @@ class ScreenPermissionControllerTest {
         void checkPermission_httpClientException_returns503() {
             ScreenPermissionRequest request = ScreenPermissionRequest.builder()
                     .screenId("SCREEN_1")
-                    .typeId("A")
                     .api1Start("08:00")
                     .api1End("21:00")
-                    .api2Start("08:00")
+                    .api2Start("00:00")
                     .api2End("23:59")
                     .build();
 
-            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "A", "08:00", "21:00", "08:00", "23:59"))
+            when(screenPermissionService.checkPermission("SCREEN_1", "eeeeeeee", "08:00", "21:00", "00:00", "23:59"))
                     .thenThrow(new HttpClient.HttpClientException("connection failed"));
 
             ResponseEntity<ScreenPermissionResponse> result = controller.checkPermission(request);

@@ -106,7 +106,6 @@ export class PermissionGuardT implements CanActivate, CanActivateChild {
    */
   private async checkPermission(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<boolean> {
     const screenId: string | undefined = route.data?.['screenId'];
-    const typeId: string | undefined = route.data?.['typeId'];
     const api1Start: string | undefined = route.data?.['api1Start'];
     const api1End: string | undefined = route.data?.['api1End'];
     const api2Start: string | undefined = route.data?.['api2Start'];
@@ -120,7 +119,7 @@ export class PermissionGuardT implements CanActivate, CanActivateChild {
   
     // 画面権限をチェック
     const result = await this.screenPermissionService.checkScreenPermission(
-      screenId, typeId, api1Start, api1End, api2Start, api2End
+      screenId, api1Start, api1End, api2Start, api2End
     );
     
     if (result.authorized) {

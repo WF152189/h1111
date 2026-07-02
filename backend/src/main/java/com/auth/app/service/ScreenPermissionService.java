@@ -1,26 +1,27 @@
 package com.auth.app.service;
 
 import com.auth.app.client.HttpClient;
+import com.auth.app.dto.PermissionCheckResult;
 import com.auth.app.dto.external.Api1PermissionRequest;
 import com.auth.app.dto.external.Api2PermissionRequest;
+import com.auth.app.dto.external.ExternalPermissionResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalTime;
-import java.util.Map;
 
 /**
  * 画面権限サービス
  * 
  * 責務:
- * - typeId とフロントエンドから受信した運用時間に基づいて適切な外部APIを選択
+ * - フロントエンドから受信した運用時間情報に基づいて適切な外部APIを選択
  * - 選択したAPIに対して認可チェックを依頼
  * 
- * API選択ルール:
- * - Aタイプ: API1優先、運用時間外ならAPI2（両方運用時間チェック）
- * - Bタイプ: 常にAPI2
- * - Cタイプ: 常にAPI1
+ * API選択ルール（運用時間情報で判定）:
+ * - パターン1（両方利用可能）: api1Start/api1End/api2Start/api2End すべて指定 → API1優先、運用時間外ならAPI2
+ * - パターン2（API1のみ）: api1Start/api1End のみ指定 → 常にAPI1
+ * - パターン3（API2のみ）: api2Start/api2End のみ指定 → 常にAPI2
  * 
  * 運用時間はフロントエンドの router.data から送信される。
  */
@@ -52,40 +53,43 @@ public class ScreenPermissionService {
      * 画面権限チェックを実行
      * 
      * フロー:
-     * 1. typeId + フロントエンドから受信した運用時間 + 現在時刻 → API選択
+     * 1. フロントエンドから受信した運用時間情報 + 現在時刻 → API選択
      * 2. 選択したAPIに認可チェックを依頼
-     * 3. 結果を返却
+     * 3. error.flg で権限判定
      * 
      * @param screenId 画面ID
      * @param userId ユーザーID
-     * @param typeId タイプID（A/B/C）
-     * @param api1Start API1運用開始時刻（null可: B/Cタイプでは不要）
-     * @param api1End API1運用終了時刻（null可: B/Cタイプでは不要）
-     * @param api2Start API2運用開始時刻（null可: B/Cタイプでは不要）
-     * @param api2End API2運用終了時刻（null可: B/Cタイプでは不要）
-     * @return 認可結果（true=許可, false=拒否）
-     * @throws IllegalArgumentException typeId が不正な場合
+     * @param api1Start API1運用開始時刻（null可: API2のみの場合）
+     * @param api1End API1運用終了時刻（null可: API2のみの場合）
+     * @param api2Start API2運用開始時刻（null可: API1のみの場合）
+     * @param api2End API2運用終了時刻（null可: API1のみの場合）
+     * @return 権限判定結果（authorized + errorMessage）
+     * @throws IllegalArgumentException 運用時間情報が不正な場合
      * @throws HttpClient.HttpClientException 外部API呼び出し失敗時
      */
-    public boolean checkPermission(String screenId, String userId, String typeId,
+    public PermissionCheckResult checkPermission(String screenId, String userId,
                                    String api1Start, String api1End,
                                    String api2Start, String api2End) {
-        // 1. API選択
+        // 1. API選択（運用時間情報で判定）
         LocalTime now = LocalTime.now();
-        String apiUrl = resolveApiUrl(typeId, api1Start, api1End, api2Start, api2End, now);
-        log.info("画面権限チェックAPI選択: typeId={}, apiUrl={}", typeId, apiUrl);
+        String apiUrl = resolveApiUrl(api1Start, api1End, api2Start, api2End, now);
+        log.info("画面権限チェックAPI選択: apiUrl={}", apiUrl);
         
         // 2. 外部API呼び出し（APIに応じたリクエスト構築）
-        Object requestBody = buildRequestBody(apiUrl, screenId, userId, typeId);
+        Object requestBody = buildRequestBody(apiUrl, screenId, userId);
         
-        Map<String, Object> response = httpClient.post(apiUrl, requestBody);
+        // 3. DTOで型安全にレスポンス受信
+        ExternalPermissionResponse response = httpClient.post(
+                apiUrl, requestBody, ExternalPermissionResponse.class);
         
-        // 3. 結果取得
-        Boolean authorized = (Boolean) response.get("authorized");
-        log.info("画面権限チェック結果: screenId={}, userId={}, typeId={}, authorized={}", 
-                screenId, userId, typeId, authorized);
+        // 4. error.flg で権限判定
+        boolean authorized = response.isAuthorized();
+        String errorMessage = response.getErrorMessage();
         
-        return authorized != null && authorized;
+        log.info("画面権限チェック結果: screenId={}, userId={}, authorized={}, errorMsg={}", 
+                screenId, userId, authorized, errorMessage);
+        
+        return new PermissionCheckResult(authorized, errorMessage);
     }
 
     /**
@@ -94,14 +98,13 @@ public class ScreenPermissionService {
      * @param apiUrl 呼び出し先API URL
      * @param screenId 画面ID
      * @param userId ユーザーID
-     * @param typeId タイプID
      * @return API専用のリクエストオブジェクト
      */
-    private Object buildRequestBody(String apiUrl, String screenId, String userId, String typeId) {
+    private Object buildRequestBody(String apiUrl, String screenId, String userId) {
         if (apiUrl.equals(api1Url)) {
-            // API1専用リクエスト: { "A01": { "screenId": "xxx", "typeId": "xxx" } }
+            // API1専用リクエスト: { "A01": { "screenId": "xxx" } }
             return new Api1PermissionRequest(
-                new Api1PermissionRequest.Api1Data(screenId, typeId)
+                new Api1PermissionRequest.Api1Data(screenId, null)
             );
         } else {
             // API2専用リクエスト: { "B01": { "screenId": "xxx", "userId": "xxx" } }
@@ -112,62 +115,58 @@ public class ScreenPermissionService {
     }
 
     /**
-     * typeId と現在時刻から適切なAPI URL を解決
+     * 運用時間情報から適切なAPI URLを解決
      * 
-     * @param typeId タイプID（A/B/C）
-     * @param api1Start API1運用開始時刻（Aタイプで必須）
-     * @param api1End API1運用終了時刻（Aタイプで必須）
-     * @param api2Start API2運用開始時刻（Aタイプで必須）
-     * @param api2End API2運用終了時刻（Aタイプで必須）
+     * 判定ロジック:
+     * - api1Start/api1End/api2Start/api2End すべて指定 → API1優先、運用時間外ならAPI2
+     * - api1Start/api1End のみ指定 → 常にAPI1
+     * - api2Start/api2End のみ指定 → 常にAPI2
+     * 
+     * @param api1Start API1運用開始時刻（null可）
+     * @param api1End API1運用終了時刻（null可）
+     * @param api2Start API2運用開始時刻（null可）
+     * @param api2End API2運用終了時刻（null可）
      * @param now 現在時刻
      * @return API URL
-     * @throws IllegalArgumentException typeId が不正な場合
+     * @throws IllegalArgumentException 運用時間情報が不正な場合
      */
-    String resolveApiUrl(String typeId, String api1Start, String api1End,
+    String resolveApiUrl(String api1Start, String api1End,
                          String api2Start, String api2End, LocalTime now) {
-        if (typeId == null || typeId.isEmpty()) {
-            throw new IllegalArgumentException("typeId が未設定です");
-        }
         
-        return switch (typeId.toUpperCase()) {
-            case "A" -> resolveTypeA(api1Start, api1End, api2Start, api2End, now);
-            case "B" -> api2Url;
-            case "C" -> api1Url;
-            default -> throw new IllegalArgumentException("不明なtypeId: " + typeId);
-        };
+        boolean hasApi1 = api1Start != null && api1End != null;
+        boolean hasApi2 = api2Start != null && api2End != null;
+        
+        if (hasApi1 && hasApi2) {
+            // パターン1: 両方利用可能 → API1優先、運用時間外ならAPI2
+            log.debug("パターン1（両方利用可能）: API1優先で判定");
+            return resolveWithFallback(api1Start, api1End, now);
+        } else if (hasApi1) {
+            // パターン2: API1のみ
+            log.debug("パターン2（API1のみ）: API1選択");
+            return api1Url;
+        } else if (hasApi2) {
+            // パターン3: API2のみ
+            log.debug("パターン3（API2のみ）: API2選択");
+            return api2Url;
+        } else {
+            throw new IllegalArgumentException("運用時間情報が不正です。いずれかのAPIの運用時間が必要です");
+        }
     }
 
     /**
-     * AタイプのAPI選択（時間帯で切替）
+     * API1優先で解決（パターン1用）
      * 
-     * 優先順位: API1 > API2
-     * - API1の運用時間内 → API1
-     * - API1の運用時間外でAPI2の運用時間内 → API2
-     * - 両方とも運用時間外 → API2（24時間運用の想定）
+     * @param api1Start API1運用開始時刻
+     * @param api1End API1運用終了時刻
+     * @param now 現在時刻
+     * @return API URL
      */
-    private String resolveTypeA(String api1Start, String api1End,
-                                String api2Start, String api2End, LocalTime now) {
-        if (api1Start == null || api1End == null) {
-            throw new IllegalArgumentException("AタイプにはAPI1の運用時間（api1Start, api1End）が必須です");
-        }
-        if (api2Start == null || api2End == null) {
-            throw new IllegalArgumentException("AタイプにはAPI2の運用時間（api2Start, api2End）が必須です");
-        }
-        
-        // API1の運用時間内かチェック
+    private String resolveWithFallback(String api1Start, String api1End, LocalTime now) {
         if (isWithinOperatingHours(now, api1Start, api1End)) {
-            log.debug("Aタイプ: API1運用時間内（{}-{}）→ API1選択", api1Start, api1End);
+            log.debug("API1運用時間内（{}-{}）→ API1選択", api1Start, api1End);
             return api1Url;
         }
-        
-        // API2の運用時間内かチェック
-        if (isWithinOperatingHours(now, api2Start, api2End)) {
-            log.debug("Aタイプ: API2運用時間内（{}-{}）→ API2選択", api2Start, api2End);
-            return api2Url;
-        }
-        
-        // 両方とも運用時間外 → デフォルトでAPI2
-        log.debug("Aタイプ: 両方運用時間外 → API2選択（フォールバック）");
+        log.debug("API1運用時間外 → API2選択（フォールバック）");
         return api2Url;
     }
 

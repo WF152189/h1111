@@ -1,6 +1,7 @@
 package com.auth.app.controller;
 
 import com.auth.app.client.HttpClient;
+import com.auth.app.dto.PermissionCheckResult;
 import com.auth.app.dto.ScreenPermissionRequest;
 import com.auth.app.dto.ScreenPermissionResponse;
 import com.auth.app.service.ScreenPermissionService;
@@ -13,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
  * 画面権限コントローラー
  * 
  * ユーザーの画面アクセス権限をチェックする
- * typeId と現在時刻に基づいて適切な外部APIを選択し、認可チェックを委託する
+ * 運用時間情報に基づいて適切な外部APIを選択し、認可チェックを委託する
  */
 @RestController
 @RequestMapping("/api/screens")
@@ -28,11 +29,11 @@ public class ScreenPermissionController {
      * 画面権限チェック
      * 
      * フロー:
-     * 1. リクエストから screenId, typeId を取得
+     * 1. リクエストから screenId と運用時間情報を取得
      * 2. ScreenPermissionService でAPI選択 + 外部API呼び出し
      * 3. 結果を返却
      * 
-     * @param request 画面IDとタイプIDを含むリクエスト
+     * @param request 画面IDと運用時間情報を含むリクエスト
      * @return 権限チェック結果
      */
     @PostMapping("/permission/check")
@@ -40,7 +41,6 @@ public class ScreenPermissionController {
             @RequestBody ScreenPermissionRequest request) {
         
         String screenId = request.getScreenId();
-        String typeId = request.getTypeId();
         
         // バリデーション
         if (screenId == null || screenId.isEmpty()) {
@@ -53,32 +53,22 @@ public class ScreenPermissionController {
             );
         }
         
-        if (typeId == null || typeId.isEmpty()) {
-            log.warn("画面権限チェック失敗: typeIdが未設定");
-            return ResponseEntity.badRequest().body(
-                ScreenPermissionResponse.builder()
-                    .authorized(false)
-                    .reason("タイプIDが無効です")
-                    .build()
-            );
-        }
-        
         // TODO: JWTからユーザーIDを抽出
         // 本番環境では、@AuthenticationPrincipalまたはJwtAuthenticationFilterで設定された
         // SecurityContextからユーザーIDを取得する
         String userId = "eeeeeeee";
         
-        log.info("画面権限チェック開始: userId={}, screenId={}, typeId={}", userId, screenId, typeId);
+        log.info("画面権限チェック開始: userId={}, screenId={}", userId, screenId);
         
         try {
             // 外部API呼び出し（Service経由）
-            boolean authorized = screenPermissionService.checkPermission(
-                    screenId, userId, typeId,
+            PermissionCheckResult result = screenPermissionService.checkPermission(
+                    screenId, userId,
                     request.getApi1Start(), request.getApi1End(),
                     request.getApi2Start(), request.getApi2End());
             
-            if (authorized) {
-                log.info("画面アクセス許可: userId={}, screenId={}, typeId={}", userId, screenId, typeId);
+            if (result.isAuthorized()) {
+                log.info("画面アクセス許可: userId={}, screenId={}", userId, screenId);
                 return ResponseEntity.ok(
                     ScreenPermissionResponse.builder()
                         .authorized(true)
@@ -86,17 +76,22 @@ public class ScreenPermissionController {
                         .build()
                 );
             } else {
-                log.warn("画面アクセス拒否: userId={}, screenId={}, typeId={}", userId, screenId, typeId);
+                // エラーメッセージ: 外部APIから取得したメッセージ、またはデフォルト
+                String reason = result.getErrorMessage() != null 
+                    ? result.getErrorMessage() 
+                    : "この画面へのアクセス権限がありません";
+                
+                log.warn("画面アクセス拒否: userId={}, screenId={}, reason={}", userId, screenId, reason);
                 return ResponseEntity.ok(
                     ScreenPermissionResponse.builder()
                         .authorized(false)
-                        .reason("この画面へのアクセス権限がありません")
+                        .reason(reason)
                         .build()
                 );
             }
             
         } catch (IllegalArgumentException e) {
-            // typeId が不正
+            // 運用時間情報が不正
             log.warn("画面権限チェック失敗: {}", e.getMessage());
             return ResponseEntity.badRequest().body(
                 ScreenPermissionResponse.builder()
